@@ -1,0 +1,8 @@
+node_modules/
+out/
+mp4/
+tts/
+*.webm
+baseline.sqlite
+chapters.mjs
+survey.txt
