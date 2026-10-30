@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Camera framing check</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.6 Inter, ui-sans-serif, system-ui, sans-serif; color: #172033; background: #f3f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 7vw; background: #fff; border-bottom: 1px solid #dce3ed; }
+    .brand { color: #174ea6; font-weight: 800; letter-spacing: -.03em; }
+    main { width: min(100% - 32px, 900px); margin: 54px auto 100px; }
+    .card { padding: clamp(24px, 5vw, 52px); background: #fff; border: 1px solid #dce3ed; border-radius: 18px; box-shadow: 0 16px 50px #22385c12; }
+    h1, h2, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(30px, 5vw, 44px); line-height: 1.15; letter-spacing: -.04em; }
+    .muted { color: #617089; }
+    form { display: grid; gap: 20px; margin-top: 30px; }
+    label { display: grid; gap: 7px; font-weight: 650; }
+    input, textarea, button { font: inherit; }
+    input { width: 100%; min-height: 50px; padding: 10px 14px; border: 1px solid #bdc9d9; border-radius: 9px; background: #fff; }
+    input:focus { outline: 3px solid #b8d3ff; border-color: #2768c7; }
+    button { width: fit-content; min-height: 48px; padding: 10px 22px; border: 0; border-radius: 9px; background: #1758ad; color: white; font-weight: 750; cursor: pointer; }
+    button:hover { background: #10478f; }
+    #profile { display: none; }
+    .profile-head { display: flex; align-items: center; gap: 22px; margin-bottom: 38px; }
+    .avatar { display: grid; place-items: center; flex: 0 0 88px; height: 88px; border-radius: 50%; background: #d9e8ff; color: #174ea6; font-size: 30px; font-weight: 800; }
+    .profile-head h1 { margin-bottom: 4px; }
+    .profile-section { padding: 26px 0; border-top: 1px solid #e3e9f1; scroll-margin-top: 28px; }
+    .profile-section h2 { margin-bottom: 9px; font-size: 22px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .detail { padding: 16px; border-radius: 10px; background: #f5f8fc; }
+    .detail strong { display: block; }
+    @media (max-width: 560px) {
+      header { padding: 0 20px; }
+      main { margin-top: 24px; }
+      .profile-head { align-items: flex-start; gap: 14px; }
+      .avatar { flex-basis: 62px; height: 62px; font-size: 22px; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header><span class="brand">Fieldnote</span><span class="muted">A little place to begin</span></header>
+  <main>
+    <section class="card" id="registration" aria-labelledby="register-title">
+      <h1 id="register-title">Create your account</h1>
+      <p class="muted">Join Fieldnote and keep your work, ideas, and people in one place.</p>
+      <form id="register-form">
+        <label>Full name<input name="name" autocomplete="name" placeholder="e.g. Maya Chen" required></label>
+        <label>Email address<input name="email" type="email" autocomplete="email" placeholder="maya@example.com" required></label>
+        <label>Create a password<input name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required></label>
+        <button type="submit">Create account</button>
+      </form>
+    </section>
+
+    <article class="card" id="profile" aria-labelledby="profile-title">
+      <div class="profile-head">
+        <div class="avatar" aria-hidden="true">MC</div>
+        <div><h1 id="profile-title">Maya Chen</h1><p class="muted">Product designer · Portland, Oregon</p></div>
+      </div>
+      <section class="profile-section" id="about"><h2>About</h2><p>Maya designs calm, useful tools for teams doing thoughtful work. She is interested in the small choices that make complicated systems feel welcoming, and in building products that respect the attention of the people who use them.</p><p>Over the last decade she has worked with early-stage teams, public-interest organizations, and established companies. Her practice moves between research, interaction design, prototyping, and the patient work of helping a team decide what matters most.</p></section>
+      <section class="profile-section"><h2>Current focus</h2><p>Right now Maya is shaping a collaborative research workspace. The team is exploring how notes, decisions, and source material can stay connected as a project grows, without making the interface feel like another inbox to manage.</p><div class="detail-grid"><div class="detail"><strong>Working on</strong>Research tools</div><div class="detail"><strong>Open to</strong>Design partnerships</div></div></section>
+      <section class="profile-section"><h2>Experience</h2><p><strong>Northstar Studio · Principal Designer</strong><br>2021–Present · Portland, Oregon</p><p>Leads product strategy and design for a small studio working with mission-driven organizations. Recent projects include a field research platform, a community health directory, and an accessible planning tool.</p><p><strong>Common Thread · Senior Product Designer</strong><br>2017–2021 · San Francisco, California</p><p>Built tools for distributed teams, from early user research through launch. Partnered with engineering and customer success to make feedback part of the product cycle.</p><p><strong>Brightside · Product Designer</strong><br>2014–2017 · Seattle, Washington</p><p>Worked across mobile and web experiences for independent educators and creative businesses. Helped establish the company’s first design system.</p></section>
+      <section class="profile-section"><h2>Selected work</h2><p><strong>Common Ground</strong> — A directory that helps neighbors find local support and services.</p><p><strong>Quiet Hours</strong> — A gentle team ritual for protecting focus time across time zones.</p><p><strong>Field Kit</strong> — A mobile research companion for people working outside the office.</p><p><strong>Open Shelf</strong> — A shared reading list for small learning communities.</p></section>
+      <section class="profile-section"><h2>Writing and talks</h2><p>“Designing for the second visit” · Studio Notes, 2025</p><p>“The useful pause” · Good Systems Gathering, 2024</p><p>“Make room for the edge case” · Open Product Forum, 2023</p><p>“A field guide to clear interfaces” · Common Thread Journal, 2022</p></section>
+      <section class="profile-section"><h2>Beyond the screen</h2><p>Maya spends weekends on long walks, tends a small balcony garden, and keeps a notebook of neighborhood signs. She volunteers with a local repair cafe and is slowly learning to make a decent loaf of sourdough.</p><p>She believes good work comes from curiosity, generous collaboration, and leaving enough time to notice what people are actually telling you.</p></section>
+      <section class="profile-section" id="contact"><h2>Get in touch</h2><p>For thoughtful projects, questions, or a good book recommendation, reach Maya at <a href="mailto:maya@example.com">maya@example.com</a>.</p><button type="button" id="back-to-start">Back to registration</button></section>
+    </article>
+  </main>
+  <script>
+    const form = document.querySelector('#register-form')
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      const name = new FormData(form).get('name').trim()
+      document.querySelector('#profile-title').textContent = name || 'Maya Chen'
+      document.querySelector('#registration').style.display = 'none'
+      document.querySelector('#profile').style.display = 'block'
+      window.scrollTo(0, 0)
+    })
+    document.querySelector('#back-to-start').addEventListener('click', () => {
+      document.querySelector('#profile').style.display = 'none'
+      document.querySelector('#registration').style.display = 'block'
+      window.scrollTo(0, 0)
+    })
+  </script>
+</body>
+</html>

@@ -143,9 +143,9 @@ typeahead found nothing. Output lands in `mp4/<id>.mp4`.
 
 ## The camera
 
-The frame follows the pointer. Each step puts the camera on its target, holds the punch-in while
-the pointer keeps working nearby, and pulls back when it stops — so a 14px field is readable on a
-phone without the viewer losing where they are.
+The frame follows the pointer. Each step puts the camera on its target, then returns to the wide
+view before the next target. `{ stay: true }` keeps a punch-in across related steps, and a pause
+also lets the camera pull back — so a 14px field is readable without losing where it is.
 
 It needs nothing from the chapter: `click`, `type` and `point` drive it. Three knobs when you want
 them:

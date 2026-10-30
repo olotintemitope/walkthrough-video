@@ -1,11 +1,74 @@
 import { _electron as electron, chromium, devices } from 'playwright-core'
 import fs from 'node:fs'
+import { spawn } from 'node:child_process'
 import { render } from './tts.mjs'
 import path from 'node:path'
 
 import { TARGET, APP, BIN, SERVER, SERVER_ENV, START_URL, HEADLESS, DEVICE, LOGIN, SIZE, SEL } from './config.mjs'
 
 export { TARGET, APP, BIN, SERVER, LOGIN, SEL }
+
+/** Capture Chrome's PNG screencast frames and encode them once at delivery quality. */
+export async function startHighQualityCapture(win, dir, view) {
+  const cdp = await win.context().newCDPSession(win)
+  const portrait = view.h > view.w
+  const outputSize = portrait ? { width: 1080, height: 1920 } : { width: 1920, height: 1080 }
+  const output = path.join(dir, 'capture-silent.mp4')
+  const vf = `scale=${outputSize.width}:${outputSize.height}:force_original_aspect_ratio=decrease,pad=${outputSize.width}:${outputSize.height}:(ow-iw)/2:(oh-ih)/2:color=0xEAEDED,format=yuv420p`
+  const ffmpeg = spawn('ffmpeg', [
+    '-nostdin', '-loglevel', 'error', '-y',
+    '-f', 'image2pipe', '-framerate', '30', '-vcodec', 'png', '-i', 'pipe:0',
+    '-vf', vf, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '13', '-r', '30',
+    '-movflags', '+faststart', '-an', output,
+  ], { stdio: ['pipe', 'ignore', 'pipe'] })
+
+  let latestFrame = null
+  let frameCount = 0
+  let stderr = ''
+  let stopped = false
+  let finalPath = null
+  ffmpeg.stderr.on('data', (chunk) => { stderr = (stderr + chunk.toString()).slice(-3000) })
+  const completion = new Promise((resolve, reject) => {
+    ffmpeg.once('error', reject)
+    ffmpeg.once('close', resolve)
+  })
+  const startedAt = Date.now()
+
+  cdp.on('Page.screencastFrame', ({ data, sessionId }) => {
+    latestFrame = Buffer.from(data, 'base64')
+    frameCount++
+    cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {})
+  })
+
+  await cdp.send('Page.enable')
+  await cdp.send('Page.startScreencast', {
+    format: 'png', maxWidth: view.w, maxHeight: view.h, everyNthFrame: 1,
+  })
+
+  // CDP sends frames only when the page changes. Write the latest frame at a fixed
+  // cadence so pauses and narration keep their real duration in the final video.
+  const timer = setInterval(() => {
+    if (latestFrame && !ffmpeg.stdin.destroyed) ffmpeg.stdin.write(latestFrame)
+  }, 1000 / 30)
+
+  return {
+    startedAt,
+    async stop(name) {
+      if (stopped) return finalPath
+      stopped = true
+      clearInterval(timer)
+      await cdp.send('Page.stopScreencast').catch(() => {})
+      await cdp.detach().catch(() => {})
+      ffmpeg.stdin.end()
+      const code = await completion
+      if (code !== 0) throw new Error(`high-quality capture failed${stderr ? `: ${stderr}` : ''}`)
+      if (!frameCount) throw new Error('high-quality capture produced no frames')
+      finalPath = path.join(dir, `${name}-silent.mp4`)
+      fs.renameSync(output, finalPath)
+      return finalPath
+    },
+  }
+}
 
 /** Playwright records the page, not the OS pointer, so a tutorial would have invisible clicks.
  *  This draws one in the page and drives it alongside the real input. */
@@ -73,12 +136,16 @@ const CURSOR = `
     cam.y += (cam.ty - cam.y) * 0.10
 
     const vw = window.innerWidth, vh = window.innerHeight
+    const sw = Math.max(stage.scrollWidth, vw), sh = Math.max(stage.scrollHeight, vh)
+    const sx = window.scrollX, sy = window.scrollY
     // Hold the focus point in the middle, then refuse to show anything past the page edges -
     // letterboxing the app against its own background is the one thing that looks broken.
-    let dx = vw / 2 - cam.x * cam.k
-    let dy = vh / 2 - cam.y * cam.k
-    dx = clamp(dx, vw - vw * cam.k, 0)
-    dy = clamp(dy, vh - vh * cam.k, 0)
+    let dx = vw / 2 + sx - cam.x * cam.k
+    let dy = vh / 2 + sy - cam.y * cam.k
+    // Translation is in viewport coordinates while stage content lives in document
+    // coordinates. Include scroll offsets and the real stage size when limiting travel.
+    dx = clamp(dx, vw + sx - sw * cam.k, sx)
+    dy = clamp(dy, vh + sy - sh * cam.k, sy)
     stage.style.transform = \`translate(\${dx}px, \${dy}px) scale(\${cam.k})\`
     requestAnimationFrame(frame)
   }
@@ -89,8 +156,9 @@ const CURSOR = `
   window.__look = (sx, sy, k) => {
     clearTimeout(cam.timer)
     const t = new DOMMatrix(getComputedStyle(stage).transform)
-    cam.tx = (sx - t.e) / t.a
-    cam.ty = (sy - t.f) / t.d
+    // boundingBox() is viewport-relative; undo both the page scroll and stage transform.
+    cam.tx = (sx + window.scrollX - t.e) / t.a
+    cam.ty = (sy + window.scrollY - t.f) / t.d
     if (typeof k === 'number') cam.tk = k
   }
   window.__zoom = (k) => { clearTimeout(cam.timer); cam.tk = k }
@@ -113,16 +181,16 @@ const CURSOR = `
  * care. `win` is a Playwright page in both cases, which is why the cursor, captions and chapters
  * are written once and work against a desktop app and a website alike.
  *
- * `t0` is stamped at launch: narration offsets are measured from it so the voice lands on the
- * frame the action happens.
+ * `t0` marks the start of the captured take: narration offsets are measured from it so the voice
+ * lands on the frame the action happens.
  */
 export async function boot({ dir, size = SIZE } = {}) {
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
 
   const recordVideo = { dir, size }
-  const t0 = Date.now()
-  let win, close
+  let t0 = Date.now()
+  let win, close, capture
 
   if (TARGET === 'electron') {
     // An isolated profile per take. Share one and the app remembers the last session, so the
@@ -157,20 +225,27 @@ export async function boot({ dir, size = SIZE } = {}) {
     const ctx = await browser.newContext({
       ...(profile ?? {}),
       viewport: profile?.viewport ?? size,
+      // Keep desktop's CSS pixels one-to-one with the 1080p capture; the source UI reads
+      // more cleanly without being resampled from a 2x backing store.
       deviceScaleFactor: 1,
-      recordVideo: { ...recordVideo, size: profile?.viewport ?? size },
     })
     win = await ctx.newPage()
+    const initialView = await win.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }))
+    capture = await startHighQualityCapture(win, dir, initialView)
+    t0 = capture.startedAt
     await win.goto(START_URL, { waitUntil: 'networkidle' }).catch(() => {})
     await win.waitForTimeout(1200)
-    // The context owns the video file; it has to close before the .webm is finalised.
-    close = async () => { await ctx.close(); await browser.close() }
+    close = async () => {
+      await capture?.stop(path.basename(dir)).catch(() => {})
+      await ctx.close()
+      await browser.close()
+    }
   }
 
   const view = await win.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }))
   fs.writeFileSync(path.join(dir, 'viewport.json'), JSON.stringify(view))
 
-  return { win, close, size, view, t0, cues: [] }
+  return { win, close, size, view, t0, cues: [], capture }
 }
 
 export const cursorOn = (win) => win.evaluate(CURSOR).catch(() => {})
@@ -223,6 +298,29 @@ export async function glide(win, x, y, ms = 650) {
   }
 }
 
+/** Wait until the compositor camera has finished moving before text is entered. */
+async function settleCamera(win, { stable = 100, timeout = 1800 } = {}) {
+  await win.evaluate(({ stable, timeout }) => new Promise((resolve) => {
+    const start = performance.now()
+    let stillSince = null
+    const check = () => {
+      const now = performance.now()
+      const c = window.__camState?.()
+      if (!c || now - start >= timeout) return resolve()
+      const moving = Math.abs(c.k - c.tk) > 0.003
+        || Math.abs(c.x - c.tx) > 0.75
+        || Math.abs(c.y - c.ty) > 0.75
+      if (moving) stillSince = null
+      else {
+        stillSince ??= now
+        if (now - stillSince >= stable) return resolve()
+      }
+      requestAnimationFrame(check)
+    }
+    requestAnimationFrame(check)
+  }), { stable, timeout })
+}
+
 /* How close the camera sits. Working shots punch in; a title card or an explicit wide beat pulls
    back so the viewer can see where they are. Tuned so a 14px field is comfortable on a phone
    without the surrounding screen disappearing. */
@@ -240,10 +338,35 @@ export const SETTLE = 900
  * moves, and the second says where it has been moved to. Gliding the pointer to the first
  * reading would send it to where the element used to be.
  */
-async function focusOn(win, locator, k) {
-  let [x, y] = await centre(locator)
-  await win.evaluate(([a, b, kk]) => window.__look?.(a, b, kk), [x, y, k])
+async function focusOn(win, locator, k, stay = false) {
+  const currentScale = await win.evaluate(() => window.__camState?.().k ?? 1)
+  if (!stay && currentScale > 1.02) await wide(win, { ms: 450 })
+  await locator.first().scrollIntoViewIfNeeded().catch(() => {})
+  await win.waitForTimeout(180)
+
+  const firstBox = await box(locator)
+  let x = firstBox.x + firstBox.width / 2
+  let y = firstBox.y + firstBox.height / 2
+  const { vw, vh, settledScale } = await win.evaluate(() => ({
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+    settledScale: window.__camState?.().k ?? 1,
+  }))
+  // Keep the whole target in frame with a little breathing room. Small targets retain
+  // the configured punch-in; large controls, drawers, and phone layouts zoom less.
+  const framingScale = Math.min(
+    k,
+    (vw * 0.82 * settledScale) / Math.max(firstBox.width, 1),
+    (vh * 0.72 * settledScale) / Math.max(firstBox.height, 1),
+  )
+  const targetScale = Math.max(1, framingScale)
+  await win.evaluate(([a, b, kk]) => window.__look?.(a, b, kk), [x, y, targetScale])
   await win.waitForTimeout(650)
+  ;[x, y] = await centre(locator)
+  // Scrolling and responsive layouts can shift the target while the zoom settles.
+  // Re-aim from its transformed position so that drift does not carry into the glide.
+  await win.evaluate(([a, b, kk]) => window.__look?.(a, b, kk), [x, y, targetScale])
+  await win.waitForTimeout(350)
   ;[x, y] = await centre(locator)
   return [x, y]
 }
@@ -291,27 +414,52 @@ async function centre(locator) {
   throw new Error('element never settled into a box')
 }
 
+async function box(locator) {
+  await locator.first().waitFor({ state: 'visible', timeout: 15000 }).catch(async () => {
+    // Preserve centre()'s helpful distinction between a missing and hidden element.
+    await centre(locator)
+  })
+  for (let i = 0; i < 25; i++) {
+    const value = await locator.first().boundingBox()
+    if (value && value.width > 0 && value.height > 0) return value
+    await new Promise((r) => setTimeout(r, 120))
+  }
+  throw new Error('element never settled into a box')
+}
+
 /** Move the pointer there, ripple, then really click it. */
 export async function click(win, locator, { pause = 500, moveMs = 650, zoom = ZOOM.action, stay = false } = {}) {
-  await locator.first().scrollIntoViewIfNeeded().catch(() => {})
-  await win.waitForTimeout(180)
-  const [x, y] = await focusOn(win, locator, zoom)
+  let [x, y] = await focusOn(win, locator, zoom, stay)
   await glide(win, x, y, moveMs)
+  // The camera follows the animated cursor during the glide. Its last few eased frames can
+  // still move the target after the glide has finished, so remeasure only after it settles.
+  await settleCamera(win)
+  ;[x, y] = await centre(locator)
+  await win.evaluate(([a, b]) => window.__cur?.(a, b), [x, y])
+  await win.mouse.move(x, y)
   await win.evaluate(([a, b]) => window.__ring?.(a, b), [x, y])
   await win.waitForTimeout(220)
-  await locator.first().click({ force: true })
+  // Locator.click() silently moves Playwright's real mouse after the drawn cursor was placed.
+  // Click at the freshly measured point instead, keeping both pointers registered.
+  await win.mouse.click(x, y)
   await release(win, stay)
   await win.waitForTimeout(pause)
 }
 
 /** Type at a human pace so the viewer can read it going in. */
 export async function type(win, locator, text, { delay = 55, pause = 350, zoom = ZOOM.action, stay = false } = {}) {
-  await locator.first().scrollIntoViewIfNeeded().catch(() => {})
-  const [x, y] = await focusOn(win, locator, zoom)
+  let [x, y] = await focusOn(win, locator, zoom, stay)
   await glide(win, x, y, 500)
+  await settleCamera(win)
+  ;[x, y] = await centre(locator)
+  await win.evaluate(([a, b]) => window.__cur?.(a, b), [x, y])
+  await win.mouse.move(x, y)
   await win.evaluate(([a, b]) => window.__ring?.(a, b), [x, y])
-  await locator.first().click({ force: true })
+  await win.mouse.click(x, y)
   await win.waitForTimeout(200)
+  // Clicking can trigger scroll anchoring or a focus-driven layout change. Let that finish
+  // before the first glyph appears, so text is not captured while the stage is still rescaling.
+  await settleCamera(win)
   await locator.first().fill('')
   await locator.first().type(text, { delay })
   await release(win, stay)
@@ -331,9 +479,12 @@ export async function type(win, locator, text, { delay = 55, pause = 350, zoom =
  */
 /** Park the pointer on something without clicking - for "look at this" moments. */
 export async function point(win, locator, { hold = 900, zoom = ZOOM.point, stay = false } = {}) {
-  await locator.first().scrollIntoViewIfNeeded().catch(() => {})
-  const [x, y] = await focusOn(win, locator, zoom)
+  let [x, y] = await focusOn(win, locator, zoom, stay)
   await glide(win, x, y, 700)
+  await settleCamera(win)
+  ;[x, y] = await centre(locator)
+  await win.evaluate(([a, b]) => window.__cur?.(a, b), [x, y])
+  await win.mouse.move(x, y)
   await win.waitForTimeout(hold)
   await release(win, stay)
 }
@@ -347,8 +498,8 @@ export async function signIn(ctx, win) {
     // Typed without keystrokes on purpose: a password must never appear in a video.
     await win.locator(SEL.signinPassword).fill(LOGIN.password)
     await win.waitForTimeout(300)
-    await win.locator(`${SEL.signinForm} button[type=submit]`).click({ force: true }).catch(async () => {
-      await win.locator(`${SEL.signinForm} button`).first().click({ force: true })
+    await click(win, win.locator(`${SEL.signinForm} button[type=submit]`)).catch(async () => {
+      await click(win, win.locator(`${SEL.signinForm} button`).first())
     })
   }
 
@@ -361,7 +512,7 @@ export async function signIn(ctx, win) {
     console.log(`     sign-in did not take${msg ? ` (${msg})` : ''}; waiting out the rate limit`)
     await win.waitForTimeout(62000)
     await win.locator(SEL.signinPassword).fill(LOGIN.password)
-    await win.locator(`${SEL.signinForm} button`).first().click({ force: true })
+    await click(win, win.locator(`${SEL.signinForm} button`).first())
     await win.waitForTimeout(3000)
   }
   if (SEL.picker && await win.locator(SEL.picker.visible).count()) {
@@ -372,7 +523,7 @@ export async function signIn(ctx, win) {
       if (i >= 0) await sel.selectOption({ index: i })
     }
     await win.waitForTimeout(400)
-    await win.locator(SEL.picker.confirm).click({ force: true })
+    await click(win, win.locator(SEL.picker.confirm))
   }
   await win.waitForTimeout(2500)
   await cursorOn(win)
@@ -405,8 +556,7 @@ export async function reveal(win, locator) {
   const toggles = win.locator(`${SEL.tabs} ${SEL.navGroupToggle}`)
   const n = await toggles.count().catch(() => 0)
   for (let i = 0; i < n; i++) {
-    await toggles.nth(i).click().catch(() => {})
-    await win.waitForTimeout(400)
+    await click(win, toggles.nth(i), { pause: 400, moveMs: 300, stay: true }).catch(() => {})
     if (await locator.isVisible().catch(() => false)) return true
   }
   return false
@@ -455,6 +605,11 @@ export async function finish(ctx, win, dir, name) {
   if (errs.length) console.error(`  !! ${name} left an error on screen: ${errs.join(' | ')}`)
 
   await win.waitForTimeout(1200)
+  if (ctx.capture) {
+    const silent = await ctx.capture.stop(name)
+    await ctx.close()
+    return silent
+  }
   await ctx.close()
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.webm'))
   if (!files.length) throw new Error('no video produced')

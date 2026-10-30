@@ -138,8 +138,9 @@ Each chapter prints its duration and line count and warns if it ended on an erro
 
 ## The camera
 
-The frame follows the pointer: each step puts the camera on its target, holds the punch-in while
-the pointer keeps working nearby, and pulls back when it stops. Nothing is asked of the chapter.
+The frame follows the pointer: each step puts the camera on its target, then returns to the wide
+view before the next target. `{ stay: true }` keeps a punch-in across related steps, and a pause
+also lets the camera pull back. Nothing is asked of the chapter.
 
 | | |
 | --- | --- |

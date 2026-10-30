@@ -27,5 +27,5 @@ if [ "$SH" -gt "$SW" ]; then TW=1080; TH=1920; else TW=1920; TH=1080; fi
 
 ffmpeg -nostdin -loglevel error -y -i "$SRC" \
   -vf "${CROP}scale=${TW}:${TH}:force_original_aspect_ratio=decrease,pad=${TW}:${TH}:(ow-iw)/2:(oh-ih)/2:color=${BG},format=yuv420p" \
-  -c:v libx264 -preset slow -crf 20 -r 30 -movflags +faststart -an \
+  -c:v libx264 -preset slow -crf 16 -r 30 -movflags +faststart -an \
   "$OUT/${NAME}-silent.mp4"

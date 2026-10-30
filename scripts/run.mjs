@@ -41,10 +41,15 @@ for (const ch of list) {
     await signIn(booted, win)
     await enter(win)
     await ch.run(win, booted)
-    const webm = await finish(booted, win, dir, ch.id)
-    execFileSync('./encode.sh', [webm, ch.id, `${dir}/viewport.json`], { stdio: 'inherit' })
+    const recording = await finish(booted, win, dir, ch.id)
+    let silent
+    if (recording.endsWith('-silent.mp4')) {
+      silent = recording
+    } else {
+      execFileSync('./encode.sh', [recording, ch.id, `${dir}/viewport.json`], { stdio: 'inherit' })
+      silent = `./mp4/${ch.id}-silent.mp4`
+    }
     // Lay the narration on at the offsets it was spoken during the take.
-    const silent = `./mp4/${ch.id}-silent.mp4`
     const voiced = `./mp4/${ch.id}.mp4`
     mux(silent, booted.cues, voiced)
     fs.unlinkSync(silent)
