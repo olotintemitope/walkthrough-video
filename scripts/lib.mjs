@@ -128,6 +128,11 @@ const CURSOR = `
      debugging protocol would cost a round trip per frame and stutter. */
   const cam = { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1, timer: 0 }
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
+  const aimWide = () => {
+    cam.tk = 1
+    cam.tx = window.scrollX + window.innerWidth / 2
+    cam.ty = window.scrollY + window.innerHeight / 2
+  }
 
   function frame() {
     // Critically damped feel: fast enough to keep up with the pointer, slow enough to read.
@@ -161,7 +166,14 @@ const CURSOR = `
     cam.ty = (sy + window.scrollY - t.f) / t.d
     if (typeof k === 'number') cam.tk = k
   }
-  window.__zoom = (k) => { clearTimeout(cam.timer); cam.tk = k }
+  window.__zoom = (k) => {
+    clearTimeout(cam.timer)
+    // A wide shot is the page's normal viewport, so its focus is the viewport centre at
+    // the current scroll position. Keeping the last zoom target here can leave the left side
+    // of a wide page cropped after zooming back out from a target on the right.
+    if (k <= 1.0001) aimWide()
+    else cam.tk = k
+  }
 
   /* Pull back, but not instantly - and not at all if the pointer goes somewhere else first.
      Working through six fields of one form should not breathe in and out six times; stopping
@@ -169,7 +181,9 @@ const CURSOR = `
      focus cancels it. */
   window.__release = (after) => {
     clearTimeout(cam.timer)
-    cam.timer = setTimeout(() => { cam.tk = 1 }, after)
+    // The normal idle return must reset the focus as well as the scale. Otherwise the old
+    // target stays at frame centre and the page remains panned to an edge after zooming out.
+    cam.timer = setTimeout(aimWide, after)
   }
   window.__camState = () => ({ ...cam })
 })()`
@@ -293,7 +307,9 @@ export async function glide(win, x, y, ms = 650) {
     const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2 // ease-in-out
     const cx = from[0] + (x - from[0]) * e
     const cy = from[1] + (y - from[1]) * e
-    await win.evaluate(([a, b]) => { window.__cur?.(a, b); window.__look?.(a, b) }, [cx, cy])
+    // The camera has already framed its target. Letting every cursor frame retarget the camera
+    // makes a pointer travelling to a side-mounted button drag the whole form towards that edge.
+    await win.evaluate(([a, b]) => window.__cur?.(a, b), [cx, cy])
     await win.waitForTimeout(16)
   }
 }
@@ -339,12 +355,28 @@ export const SETTLE = 900
  * reading would send it to where the element used to be.
  */
 async function focusOn(win, locator, k, stay = false) {
-  const currentScale = await win.evaluate(() => window.__camState?.().k ?? 1)
-  if (!stay && currentScale > 1.02) await wide(win, { ms: 450 })
+  const camera = await win.evaluate(() => {
+    const c = window.__camState?.()
+    const cx = window.scrollX + window.innerWidth / 2
+    const cy = window.scrollY + window.innerHeight / 2
+    return {
+      scale: c?.k ?? 1,
+      awayFromWide: !c || Math.abs(c.tx - cx) > 1 || Math.abs(c.ty - cy) > 1
+        || Math.abs(c.x - cx) > 1 || Math.abs(c.y - cy) > 1
+        || Math.abs(c.tk - 1) > 0.01,
+    }
+  })
+  // Finish the entire return before aiming at a different control. A short fixed delay allowed
+  // the next zoom to begin while the previous pan was still moving, which looked like an edge
+  // sweep followed by a correction back to centre.
+  if (!stay && (camera.scale > 1.02 || camera.awayFromWide)) await wide(win)
   await locator.first().scrollIntoViewIfNeeded().catch(() => {})
   await win.waitForTimeout(180)
 
-  const firstBox = await box(locator)
+  await box(locator)
+  // Controls inside a form are actions within one visual unit. Aim the camera at the form,
+  // while the drawn cursor still goes to the individual field or button.
+  let firstBox = await framingBox(locator)
   let x = firstBox.x + firstBox.width / 2
   let y = firstBox.y + firstBox.height / 2
   const { vw, vh, settledScale } = await win.evaluate(() => ({
@@ -362,19 +394,20 @@ async function focusOn(win, locator, k, stay = false) {
   const targetScale = Math.max(1, framingScale)
   await win.evaluate(([a, b, kk]) => window.__look?.(a, b, kk), [x, y, targetScale])
   await win.waitForTimeout(650)
-  ;[x, y] = await centre(locator)
-  // Scrolling and responsive layouts can shift the target while the zoom settles.
-  // Re-aim from its transformed position so that drift does not carry into the glide.
+  firstBox = await framingBox(locator)
+  x = firstBox.x + firstBox.width / 2
+  y = firstBox.y + firstBox.height / 2
+  // Scrolling and responsive layouts can shift the frame while the zoom settles. Re-aim on the
+  // whole form, then wait for that adjustment before moving the cursor to its control.
   await win.evaluate(([a, b, kk]) => window.__look?.(a, b, kk), [x, y, targetScale])
-  await win.waitForTimeout(350)
-  ;[x, y] = await centre(locator)
-  return [x, y]
+  await settleCamera(win)
+  return centre(locator)
 }
 
 /** Pull back to the whole screen - for a title card, or a beat that needs context. */
 export async function wide(win, { ms = 700 } = {}) {
   await win.evaluate((k) => window.__zoom?.(k), ZOOM.wide)
-  await win.waitForTimeout(ms)
+  await settleCamera(win, { stable: 120, timeout: Math.max(1800, ms) })
 }
 
 /**
@@ -425,6 +458,14 @@ async function box(locator) {
     await new Promise((r) => setTimeout(r, 120))
   }
   throw new Error('element never settled into a box')
+}
+
+async function framingBox(locator) {
+  return locator.first().evaluate((element) => {
+    const frame = element.closest('form') || element
+    const r = frame.getBoundingClientRect()
+    return { x: r.x, y: r.y, width: r.width, height: r.height }
+  })
 }
 
 /** Move the pointer there, ripple, then really click it. */

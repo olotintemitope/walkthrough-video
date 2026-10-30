@@ -73,6 +73,30 @@ export const DB = {
 export const SIZE = { width: 1920, height: 1080 }
 
 /**
+ * Optional, project-level finishing. Edit this block to brand the final video without touching
+ * recorder code. Leave a scene null or music.src null to omit it. Backgrounds accept a local
+ * file or direct URL; use a generated image saved in the project or an Unsplash image URL.
+ * For a video background, use { type: 'video', src: '...' }.
+ */
+export const VIDEO = {
+  output: './mp4/product-tour.mp4',
+  width: 1920,
+  height: 1080,
+  brand: 'Your product',
+  logo: null, // './assets/logo.png' or a direct image URL
+  // Optional IDs in presentation order. Omit or leave empty to use CHAPTERS order.
+  chapters: [],
+  intro: null, // { title: 'Feature name', subtitle: 'What it helps you do', duration: 1, background: { type: 'image', src: './assets/intro.jpg' } },
+  outro: null, // { title: 'Ready to get started?', subtitle: 'your-site.com', duration: 1, background: { type: 'video', src: './assets/outro.mp4' } },
+  music: {
+    src: null, // './assets/music.mp3' or a direct audio URL
+    volume: 0.12,
+    fadeIn: 1.2,
+    fadeOut: 2,
+  },
+}
+
+/**
  * Selectors. These are the app's own class names - get them from `node survey.mjs`, never by
  * guessing. The values below are one app's; yours will differ in every one of them.
  */

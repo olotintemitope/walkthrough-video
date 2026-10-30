@@ -6,8 +6,11 @@ One MP4 per chapter, with a title card, burned-in captions, a visible cursor tha
 target, a camera that follows it, and spoken narration. It drives the real application — web,
 Electron, or a mobile viewport — so what is on screen is the product, not a mockup.
 
-Built as a [Claude Code](https://claude.com/claude-code) skill, but the scripts are plain Node and
-run perfectly well on their own.
+Designed for coding agents such as Codex and Claude, and the scripts are plain Node programs that
+also run on their own. `AGENTS.md` and `SKILL.md` describe the agent workflow.
+
+**1080p example:** [Watch the product editor walkthrough](fixtures/camera-check/product-editor-1080p-silent.mp4)
+with the visible pointer and click effect.
 
 ---
 
@@ -123,6 +126,54 @@ node run.mjs ch01 ch04       # just these
 Each chapter prints its duration and line count and warns if it ended on an error. Output lands in
 `mp4/<id>.mp4`.
 
+### 6. Assemble a finished product video
+
+Edit the `VIDEO` block in `scripts/config.mjs`. It controls the brand, intro/outro copy, media,
+soundtrack, chapter order, and output size in one place. Scenes and music are optional:
+
+```js
+export const VIDEO = {
+  output: './mp4/product-tour.mp4',
+  brand: 'Northstar',
+  logo: './assets/logo.png', // optional local image or direct image URL
+  chapters: ['ch01-overview', 'ch04-invitations'], // omit to use chapter-file order
+  intro: {
+    title: 'Meet Northstar',
+    subtitle: 'Plan thoughtful work together',
+    duration: 1,
+    background: { type: 'image', src: './assets/intro.png' },
+  },
+  outro: {
+    title: 'See what your team can do',
+    subtitle: 'northstar.example',
+    duration: 1,
+    background: null, // or { type: 'video', src: './assets/outro.mp4' }
+  },
+  music: {
+    src: './assets/soft-loop.mp3', // local audio or a direct URL; null means no music
+    volume: 0.12,
+    fadeIn: 1.2,
+    fadeOut: 2,
+  },
+}
+```
+
+Use your own image, an image generated for the project, or a direct image URL from Unsplash. Save
+AI-generated artwork in `assets/` and point `src` to it. Remote images, video, and music are
+downloaded before rendering. Run:
+
+Keep intro and outro cards brief; the example uses one second each so the product footage remains
+the focus.
+
+```bash
+node scripts/assemble.mjs
+```
+
+The assembler joins the selected chapter MP4s with the optional intro and outro, then adds the
+optional music bed. It writes one upload-ready file to `VIDEO.output` and keeps the chapter MP4s.
+Set `intro` or `outro` to `null`, or `music.src` to `null`, to omit them. High-quality assembly
+preserves the detail in the capture, but cannot restore detail missing from the original app.
+
 ---
 
 ## Writing chapters people actually learn from
@@ -193,16 +244,23 @@ Drop the folder into `.claude/skills/walkthrough-video/` in your project (or
 `~/.claude/skills/` for every project). Claude picks it up next session, and asking for "a demo
 video of the checkout" or "a training video for the admin side" invokes it.
 
+## Using it as a ChatGPT skill
+
+Upload `chatgpt-skills/walkthrough-video-chatgpt.zip` from ChatGPT's **Skills → Create → Upload
+from your computer** flow. The ZIP contains a standalone `SKILL.md` for this repository's product
+recording workflow.
+
 ## Files
 
 | | |
 | --- | --- |
-| `SKILL.md` | The skill definition Claude reads |
-| `scripts/config.mjs` | **The only file you need to edit** |
+| `SKILL.md` | The repository skill instructions for coding agents |
+| `scripts/config.mjs` | **The only file you need to edit** — app, selectors, branding and media |
 | `scripts/lib.mjs` | Launch, sign-in, cursor, captions, camera, narration timing |
 | `scripts/tts.mjs` | Speech rendering, caching, muxing |
 | `scripts/encode.sh` | webm → MP4, auto-oriented, scaled to fit, never stretched |
 | `scripts/run.mjs` | Runs chapters, restores the snapshot, encodes, reports |
+| `scripts/assemble.mjs` | Joins chapters with optional intro, outro and music |
 | `scripts/survey.mjs` | Prints your app's real sections, actions and form fields |
 | `chapters.example.mjs` | A complete worked set to copy from |
 

@@ -5,8 +5,14 @@ description: Record narrated product walkthrough videos that navigate an app's f
 
 # Narrated feature walkthroughs
 
+This workflow is designed for coding agents, including Codex and Claude. Treat `VIDEO` in
+`scripts/config.mjs` as the customization contract: change branding and media there, record only
+chapters that need new footage, assemble, then inspect the exported MP4 rather than judging only
+the source recording. See `AGENTS.md` for the full agent checklist.
+
 Drives a real app with Playwright, records it navigating each feature, and lays narration over the
-result. One MP4 per chapter: title card, burned-in captions, visible cursor, spoken voiceover.
+result. Chapters can be assembled into one branded MP4 with optional intro, outro, and background
+music.
 
 The point is a video that teaches, not a screen recording. Four things make the difference, and
 each is why a piece of this exists:
@@ -140,6 +146,21 @@ node run.mjs ch06 ch11       # just these
 
 Each chapter prints its duration and line count, and warns if it ended on an error or if a
 typeahead found nothing. Output lands in `mp4/<id>.mp4`.
+
+### 6. Customize and assemble the finished video
+
+Edit the `VIDEO` object in `scripts/config.mjs` for the brand, chapter order, intro/outro text and
+duration, optional image or video backgrounds, music, and final dimensions. Point image backgrounds
+at a local image, an AI-generated file saved in the project, or a direct Unsplash image URL. Remote
+media is downloaded during assembly.
+
+```bash
+node scripts/assemble.mjs
+```
+
+This preserves the individual chapter files and writes the combined export to `VIDEO.output`.
+Leave `intro`, `outro`, or `music.src` as `null` to omit them. Do not promise that AI can sharpen a
+blurry source recording; use high-resolution assets and capture the app clearly at the source.
 
 ## The camera
 

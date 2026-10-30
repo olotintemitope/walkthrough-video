@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northstar · Create a workspace</title>
+  <style>
+    :root { color-scheme: light; font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; color: #202b3c; background: #f5f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    .shell { min-height: 100vh; }
+    .shell > aside { position: fixed; inset: 0 auto 0 0; width: 252px; padding: 26px 18px; background: #17243a; color: #e5edf9; display: flex; flex-direction: column; z-index: 2; }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 34px; font-weight: 760; font-size: 17px; letter-spacing: -.02em; }
+    .mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #6d8fff; color: white; }
+    .workspace { margin: 0 10px 26px; padding: 12px; background: #22334e; border: 1px solid #344662; border-radius: 10px; color: #b8c5d8; font-size: 12px; }
+    .workspace strong { display: block; color: white; font-size: 13px; margin-top: 3px; }
+    .nav-label { padding: 0 10px; margin: 0 0 8px; color: #91a0b6; font-size: 10px; text-transform: uppercase; letter-spacing: .11em; font-weight: 700; }
+    nav { display: grid; gap: 4px; }
+    nav a { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 11px; border-radius: 8px; color: #bdc9da; text-decoration: none; }
+    nav a.active { color: white; background: #2c4264; }
+    nav a:hover { background: #253956; }
+    .icon { width: 17px; text-align: center; opacity: .85; }
+    .side-bottom { margin-top: auto; border-top: 1px solid #34435a; padding: 18px 8px 0; display: flex; align-items: center; gap: 10px; }
+    .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #f2d5bb; color: #704228; font-weight: 750; }
+    .side-bottom small { display: block; color: #9eacc0; }
+    .main { margin-left: 252px; min-height: 100vh; }
+    header { height: 72px; padding: 0 42px; display: flex; align-items: center; justify-content: space-between; background: white; border-bottom: 1px solid #e4e9f1; }
+    .crumb { color: #718099; font-size: 13px; }
+    .crumb strong { color: #26344a; font-weight: 650; }
+    .help { color: #52637d; font-size: 13px; }
+    main { width: min(100% - 80px, 1080px); margin: 42px auto 90px; }
+    .eyebrow { color: #5473bf; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; font-weight: 750; margin: 0 0 8px; }
+    h1 { margin: 0; font-size: 32px; line-height: 1.2; letter-spacing: -.035em; color: #1d2a3d; }
+    .intro { margin: 10px 0 26px; color: #65738a; }
+    .steps { display: flex; gap: 10px; margin-bottom: 28px; }
+    .step { display: flex; align-items: center; gap: 9px; color: #8a96a9; font-size: 12px; }
+    .step .num { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #e9edf4; font-weight: 700; }
+    .step.current { color: #315ab4; font-weight: 700; }
+    .step.current .num { color: white; background: #4269c2; }
+    .step-line { width: 50px; height: 1px; background: #dce2ec; align-self: center; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+    .card { background: white; border: 1px solid #e1e7ef; border-radius: 13px; box-shadow: 0 5px 18px #28395308; }
+    .form-card { padding: 28px 30px; }
+    .card h2 { margin: 0; font-size: 17px; letter-spacing: -.015em; }
+    .card-sub { margin: 5px 0 22px; color: #77849a; font-size: 13px; }
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 16px; }
+    label { display: grid; gap: 7px; color: #39465a; font-weight: 650; font-size: 12px; }
+    label.full { grid-column: 1 / -1; }
+    input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cfd7e3; border-radius: 7px; background: white; color: #27354b; font: inherit; font-weight: 400; font-size: 13px; }
+    textarea { min-height: 94px; resize: vertical; }
+    input::placeholder, textarea::placeholder { color: #a1abbb; }
+    input:focus, select:focus, textarea:focus { outline: 3px solid #d9e5ff; border-color: #6585d2; }
+    .hint { color: #8490a3; font-size: 11px; font-weight: 400; }
+    .divider { grid-column: 1 / -1; border-top: 1px solid #edf0f5; margin: 1px 0 -1px; }
+    .check-row { display: flex; gap: 10px; align-items: flex-start; color: #65738a; font-size: 12px; }
+    .check-row input { width: 16px; min-height: 16px; margin: 2px 0 0; accent-color: #4569c2; }
+    .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #edf0f5; }
+    button { min-height: 42px; padding: 0 18px; border: 1px solid #d4dce8; border-radius: 7px; background: white; color: #53627a; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+    button.primary { border-color: #4268c1; background: #4268c1; color: white; box-shadow: 0 2px 5px #4268c133; }
+    button.primary:hover { background: #3458ad; }
+    .tips { padding: 22px; }
+    .tips h2 { font-size: 14px; }
+    .tips p { color: #77849a; font-size: 12px; margin: 9px 0 16px; }
+    .tip { display: flex; gap: 10px; margin: 16px 0; color: #55637a; font-size: 12px; }
+    .tip b { color: #4268c1; }
+    .secure { margin-top: 16px; padding: 12px; border-radius: 8px; background: #f5f8fd; color: #77849a; font-size: 11px; }
+    #success { display: none; margin-top: 16px; padding: 14px; border: 1px solid #a9dec4; border-radius: 8px; color: #236241; background: #effaf4; font-size: 13px; }
+    @media (max-width: 980px) { .shell > aside { width: 210px; } .main { margin-left: 210px; } .layout { grid-template-columns: 1fr; } .tips { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand"><span class="mark">N</span> Northstar</div>
+      <div class="workspace">WORKSPACE<strong>Acme Design Co.⌄</strong></div>
+      <p class="nav-label">Workspace</p>
+      <nav aria-label="Main navigation">
+        <a href="#overview"><span class="icon">◫</span> Overview</a>
+        <a href="#projects"><span class="icon">▤</span> Projects</a>
+        <a href="#people"><span class="icon">♧</span> People</a>
+        <a class="active" href="#settings"><span class="icon">⚙</span> Settings</a>
+      </nav>
+      <p class="nav-label" style="margin-top:28px">Manage</p>
+      <nav aria-label="Management navigation">
+        <a href="#integrations"><span class="icon">⌘</span> Integrations</a>
+        <a href="#billing"><span class="icon">▣</span> Billing</a>
+        <a href="#help"><span class="icon">?</span> Help center</a>
+      </nav>
+      <div class="side-bottom"><span class="avatar">JD</span><span>Jordan Davis<small>Workspace admin</small></span></div>
+    </aside>
+    <div class="main">
+      <header><div class="crumb">Settings&nbsp; / &nbsp;<strong>New workspace</strong></div><div class="help">◉ &nbsp;Help and support</div></header>
+      <main>
+        <p class="eyebrow">Workspace settings</p>
+        <h1>Create a workspace</h1>
+        <p class="intro">Set up a shared space for your team, clients, and projects.</p>
+        <div class="steps"><div class="step current"><span class="num">1</span> Workspace details</div><span class="step-line"></span><div class="step"><span class="num">2</span> Invite your team</div><span class="step-line"></span><div class="step"><span class="num">3</span> Review</div></div>
+        <div class="layout">
+          <section class="card form-card">
+            <h2>Workspace details</h2><p class="card-sub">Add the basics. You can change these details any time.</p>
+            <form id="workspace-form">
+              <div class="fields">
+                <label class="full">Workspace name <span class="hint">This is how your team will see it.</span><input name="workspace" placeholder="e.g. Acme Design Co." required></label>
+                <label>Workspace URL<input name="url" value="northstar.team/" required></label>
+                <label>Industry<select name="industry" required><option value="">Choose an industry</option><option>Design and creative</option><option>Software and technology</option><option>Education</option></select></label>
+                <label>Team size<select name="size" required><option value="">Select team size</option><option>1–10 people</option><option>11–50 people</option><option>51–200 people</option></select></label>
+                <label>Time zone<select name="timezone"><option>Pacific Time (UTC−08:00)</option><option>Eastern Time (UTC−05:00)</option><option>West Africa Time (UTC+01:00)</option></select></label>
+                <span class="divider"></span>
+                <label class="full">What does your team work on?<span class="hint">A short description helps us personalize your workspace.</span><textarea name="description" placeholder="We help ambitious teams bring thoughtful products to life…"></textarea></label>
+                <label class="check-row full"><input type="checkbox" checked> Send me occasional product tips and workspace updates.</label>
+              </div>
+              <div class="actions"><button type="button">Save as draft</button><button class="primary" type="submit">Continue to invitations&nbsp; →</button></div>
+              <div id="success" role="status">Workspace details saved. Your team is ready to invite.</div>
+            </form>
+          </section>
+          <aside class="card tips"><h2>A space that fits your team</h2><p>Your workspace brings projects, conversations, and useful context together.</p><div class="tip"><b>✓</b><span>Choose a name your team will recognize.</span></div><div class="tip"><b>✓</b><span>Invite teammates when your details are ready.</span></div><div class="tip"><b>✓</b><span>Update preferences later in Settings.</span></div><div class="secure">🔒 &nbsp;Your workspace is private until you invite someone.</div></aside>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>
+    document.querySelector('#workspace-form').addEventListener('submit', (event) => {
+      event.preventDefault()
+      document.querySelector('#success').style.display = 'block'
+    })
+    document.querySelectorAll('nav a').forEach(link => link.addEventListener('click', () => {
+      document.querySelectorAll('nav a').forEach(item => item.classList.remove('active'))
+      link.classList.add('active')
+    }))
+  </script>
+</body>
+</html>
