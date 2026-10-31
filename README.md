@@ -9,8 +9,18 @@ Electron, or a mobile viewport — so what is on screen is the product, not a mo
 Designed for coding agents such as Codex and Claude, and the scripts are plain Node programs that
 also run on their own. `AGENTS.md` and `SKILL.md` describe the agent workflow.
 
-**1080p example:** [Watch the product editor walkthrough](fixtures/camera-check/product-editor-1080p-silent.mp4)
-with the visible pointer and click effect.
+Need a ready-to-use request? See [sample prompts for coding agents](docs/agent-prompts.md) for
+recording a feature, investigating camera issues, customizing motion, and reviewing an export.
+See [video layouts](docs/layouts.md) for the built-in title card, the app-screen fixture layouts,
+and title-card designs that can be added for a project.
+
+The [Daymark todo and reminder demo](fixtures/todo-reminder/README.md) is a working example app
+with a [recorded promo video](fixtures/todo-reminder/daymark-todo-reminder-promo-1080p.mp4).
+The [SignalDesk AI product demo](fixtures/signaldesk/README.md) includes a recorded customer
+intelligence tour with expressive narration and downloaded, licensed music mixed below the speaker.
+
+**1080p motion example:** [Watch the animated product walkthrough](fixtures/camera-check/motion-showcase-1080p.mp4)
+with GSAP title animation, a screen transition, and the real visible pointer/click effect.
 
 ---
 
@@ -140,15 +150,17 @@ export const VIDEO = {
   intro: {
     title: 'Meet Northstar',
     subtitle: 'Plan thoughtful work together',
-    duration: 1,
+    duration: 2,
     background: { type: 'image', src: './assets/intro.png' },
   },
   outro: {
     title: 'See what your team can do',
     subtitle: 'northstar.example',
-    duration: 1,
+    duration: 2,
     background: null, // or { type: 'video', src: './assets/outro.mp4' }
   },
+  motion: { card: 'fade-up', accent: '#c8f04a' },
+  transition: { effect: 'smoothleft', duration: 0.45 },
   music: {
     src: './assets/soft-loop.mp3', // local audio or a direct URL; null means no music
     volume: 0.12,
@@ -158,12 +170,60 @@ export const VIDEO = {
 }
 ```
 
+### Choose the motion
+
+Set each scene's optional `layout` to `editorial` (default), `split`, or `closing`; see the
+[video layouts guide](docs/layouts.md). `motion.card` separately controls how its text enters. These
+are restrained GSAP animations rendered locally as part of the video:
+
+| Value | Behavior | Good for |
+| --- | --- | --- |
+| `fade-up` | Text fades in while rising slightly | A calm, general-purpose introduction |
+| `slide-left` | The eyebrow enters from the left; title and supporting copy rise into place | A directional, editorial feel |
+| `pop` | The title scales up into place | A short emphasis on a product or feature name |
+| `none` | Text appears without an entrance animation | Minimal title cards or video backgrounds |
+
+`motion.accent` sets the marker and guide accent color on title cards. Use a color from the product's
+brand palette. Indigo, violet, and purple are not defaults; use them only when the user requests
+them.
+
+`transition.effect` controls the join between each intro, chapter, and outro clip. Set one effect
+for all joins, or pass an array with one effect per join in clip order. Supported values:
+
+| Effect family | Values |
+| --- | --- |
+| Directional wipe | `wipeleft`, `wiperight`, `wipeup`, `wipedown` |
+| Directional slide | `slideleft`, `slideright`, `slideup`, `slidedown` |
+| Smooth directional reveal | `smoothleft`, `smoothright`, `smoothup`, `smoothdown` |
+| Fade | `fade`, `fadeblack`, `fadewhite`, `dissolve` |
+| Shape or texture | `circleopen`, `circleclose`, `pixelize` |
+| Direct cut | `none` |
+
+Set `transition.duration` in seconds. Keep it shorter than the shortest clip being joined; a value
+around `0.3`–`0.6` seconds usually keeps a product demo moving without distracting from the UI. A
+direct cut (`effect: 'none'`) ignores the duration. In an effect array, `none` makes just that join a
+direct cut. Transitions are rendered at the configured video dimensions, and the soundtrack is
+crossfaded with the clips.
+
+For example, use a simple fade between scenes and no title motion:
+
+```js
+motion: { card: 'none', accent: '#d9623e' },
+transition: { effect: 'fade', duration: 0.35 },
+```
+
+For three clips (intro, chapter, outro), use a separate transition at each join:
+
+```js
+transition: { effect: ['fade', 'smoothright'], duration: 0.42 },
+```
+
 Use your own image, an image generated for the project, or a direct image URL from Unsplash. Save
 AI-generated artwork in `assets/` and point `src` to it. Remote images, video, and music are
 downloaded before rendering. Run:
 
-Keep intro and outro cards brief; the example uses one second each so the product footage remains
-the focus.
+Give intro and outro cards enough time for the title to enter and settle; this example uses two
+seconds each, then clears the intro text before the product footage arrives.
 
 ```bash
 node scripts/assemble.mjs
@@ -173,6 +233,10 @@ The assembler joins the selected chapter MP4s with the optional intro and outro,
 optional music bed. It writes one upload-ready file to `VIDEO.output` and keeps the chapter MP4s.
 Set `intro` or `outro` to `null`, or `music.src` to `null`, to omit them. High-quality assembly
 preserves the detail in the capture, but cannot restore detail missing from the original app.
+Intro and outro cards use local GSAP timelines for sequenced text motion; chapter transitions are
+rendered at the configured output dimensions. GSAP is installed locally, so title-card animation
+does not depend on a runtime CDN. Title-card entrances affect text only; they do not animate or
+reframe the recorded product footage.
 
 ---
 
@@ -207,9 +271,9 @@ page on `requestAnimationFrame`; driving it from the recorder would cost a round
 
 ## Narration
 
-OpenAI `gpt-4o-mini-tts`. `TTS_VOICE` picks from alloy, ash, ballad, coral, echo, fable, nova,
-onyx, sage, shimmer, verse. `TTS_INSTRUCTIONS` steers delivery in plain English and does more for
-how it lands than the voice does.
+OpenAI `gpt-4o-mini-tts`. The default voice is `marin`; `marin` and `cedar` are recommended for
+quality. `TTS_VOICE` can select another supported voice. `TTS_INSTRUCTIONS` steers tone, emotion,
+intonation, and pace in plain English.
 
 Clips cache on voice + instructions + text, so fixing one sentence re-synthesises one sentence. A
 thirteen-chapter set costs a couple of cents.

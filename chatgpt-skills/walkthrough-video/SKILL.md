@@ -36,6 +36,13 @@ can prove the recorder flow; it cannot prove the user's product UI, data, narrat
   recover detail that was absent from the captured source.
 - Add an intro, outro, soundtrack, or background only when requested. Keep optional scenes at the
   duration the user specifies; don't invent product claims, logos, music, or external media.
+- For requested intro/outro motion, `VIDEO.motion.card` accepts `fade-up`, `slide-left`, `pop`, or
+  `none`; `VIDEO.motion.accent` sets the title-card accent. `VIDEO.transition.effect` accepts
+  directional `wipe*`, `slide*`, or `smooth*` effects; `fade`, `fadeblack`, `fadewhite`, `dissolve`,
+  `circleopen`, `circleclose`, `pixelize`, or `none` for a direct cut. Set transition duration in
+  seconds, shorter than every clip being joined. Prefer brief, consistent transitions that help
+  explain a scene change. See the repository README for the complete effect list and examples.
+- Never use indigo, violet, or purple by default; use them only when the user specifies them.
 - If asked to generate artwork, use the available image-generation capability and save the result
   in the project before referencing it. If asked for Unsplash or a URL, use a direct media URL and
   check that it is accessible to the assembly workflow.

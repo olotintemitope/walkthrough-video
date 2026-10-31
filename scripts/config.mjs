@@ -86,8 +86,13 @@ export const VIDEO = {
   logo: null, // './assets/logo.png' or a direct image URL
   // Optional IDs in presentation order. Omit or leave empty to use CHAPTERS order.
   chapters: [],
-  intro: null, // { title: 'Feature name', subtitle: 'What it helps you do', duration: 1, background: { type: 'image', src: './assets/intro.jpg' } },
-  outro: null, // { title: 'Ready to get started?', subtitle: 'your-site.com', duration: 1, background: { type: 'video', src: './assets/outro.mp4' } },
+  intro: null, // { title: 'Feature name', subtitle: 'What it helps you do', duration: 2, background: { type: 'image', src: './assets/intro.jpg' } },
+  outro: null, // { title: 'Ready to get started?', subtitle: 'your-site.com', duration: 2, background: { type: 'video', src: './assets/outro.mp4' } },
+  // Animated title cards work with solid or image backgrounds. Video backgrounds stay live.
+  motion: { card: 'fade-up', accent: '#c8f04a' }, // 'fade-up', 'slide-left', 'pop', or 'none'
+  // Joins intro, chapters, and outro. Use an effect array to choose one per join.
+  // Set effect:'none' for direct cuts at every join.
+  transition: { effect: 'smoothleft', duration: 0.45 },
   music: {
     src: null, // './assets/music.mp3' or a direct audio URL
     volume: 0.12,

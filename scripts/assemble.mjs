@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { VIDEO } from './config.mjs'
+import { createAnimatedCard, transitionClips } from './motion.mjs'
 
 let CHAPTERS
 for (const file of ['./chapters.mjs', '../chapters.mjs']) {
@@ -56,7 +57,7 @@ async function cardImage(scene, dest, overlayOnly = false) {
     const background = scene.background
     const style = overlayOnly
       ? 'background:transparent'
-      : 'background:linear-gradient(135deg,#101b35 0%,#263d67 55%,#101b35 100%)'
+      : 'background:linear-gradient(135deg,#171a16 0%,#343a32 55%,#171a16 100%)'
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>
       *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden}
       body{${style};font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#fff}
@@ -113,7 +114,7 @@ function normalizeClip(input, output) {
   const audio = hasAudio(input)
   if (!audio) args.push('-f', 'lavfi', '-t', String(seconds), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000')
   args.push('-map', '0:v:0', '-map', audio ? '0:a:0' : '1:a:0',
-    '-vf', `scale=${VIDEO.width}:${VIDEO.height}:force_original_aspect_ratio=decrease,pad=${VIDEO.width}:${VIDEO.height}:(ow-iw)/2:(oh-ih)/2:color=0x101b35,fps=30,format=yuv420p`,
+    '-vf', `scale=${VIDEO.width}:${VIDEO.height}:force_original_aspect_ratio=decrease,pad=${VIDEO.width}:${VIDEO.height}:(ow-iw)/2:(oh-ih)/2:color=0x171a16,fps=30,format=yuv420p`,
     '-t', String(seconds), '-c:v', 'libx264', '-preset', 'slow', '-crf', '13', '-r', '30',
     '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', output)
   run('ffmpeg', args)
@@ -138,18 +139,41 @@ try {
   }) : CHAPTERS
   if (!chosen.length) throw new Error('there are no chapters to assemble')
 
-  for (const [key, scene] of [['intro', VIDEO.intro], ['outro', VIDEO.outro]]) {
-    if (!scene) continue
-    const still = path.join(temp, `${key}.png`)
+  async function makeScene(scene, key) {
+    if (!scene) return null
     const clip = path.join(temp, `${key}.mp4`)
     const videoBackground = scene.background?.type === 'video'
+    const cardMotion = VIDEO.motion?.card || 'none'
+    if (!videoBackground && cardMotion !== 'none') {
+      const captureDir = path.join(temp, `${key}-capture`)
+      const captured = await createAnimatedCard(scene, {
+        directory: captureDir,
+        name: key,
+        width: VIDEO.width,
+        height: VIDEO.height,
+        brand: VIDEO.brand,
+        logo: VIDEO.logo,
+        accent: VIDEO.motion?.accent || '#c8f04a',
+        effect: cardMotion,
+        layout: scene.layout || 'editorial',
+        exit: key === 'intro',
+        transitionDuration: VIDEO.transition?.effect === 'none' ? 0 : Number(VIDEO.transition?.duration) || 0.45,
+      })
+      normalizeClip(captured, clip)
+      fs.rmSync(captureDir, { recursive: true, force: true })
+      return clip
+    }
+    const still = path.join(temp, `${key}.png`)
     await cardImage(scene, still, videoBackground)
     renderScene(scene, clip, still)
+    return clip
   }
 
+  await makeScene(VIDEO.intro, 'intro')
+  await makeScene(VIDEO.outro, 'outro')
   const normalized = []
-  const introClip = fs.existsSync(path.join(temp, 'intro.mp4')) ? path.join(temp, 'intro.mp4') : null
-  const outroClip = fs.existsSync(path.join(temp, 'outro.mp4')) ? path.join(temp, 'outro.mp4') : null
+  const introClip = VIDEO.intro ? path.join(temp, 'intro.mp4') : null
+  const outroClip = VIDEO.outro ? path.join(temp, 'outro.mp4') : null
   if (introClip) normalized.push(introClip)
   for (const chapter of chosen) {
     const source = path.resolve(`./mp4/${chapter.id}.mp4`)
@@ -160,10 +184,8 @@ try {
   }
   if (outroClip) normalized.push(outroClip)
 
-  const list = path.join(temp, 'concat.txt')
-  fs.writeFileSync(list, normalized.map((file) => `file '${file.replaceAll("'", "'\\''")}'`).join('\n'))
   const assembled = path.join(temp, 'assembled.mp4')
-  run('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', assembled])
+  transitionClips(normalized, VIDEO.transition || { effect: 'none' }, assembled)
 
   const output = path.resolve(VIDEO.output)
   fs.mkdirSync(path.dirname(output), { recursive: true })

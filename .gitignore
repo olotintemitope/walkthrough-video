@@ -2,6 +2,7 @@ node_modules/
 out/
 mp4/
 tts/
+.env.local
 *.webm
 baseline.sqlite
 chapters.mjs

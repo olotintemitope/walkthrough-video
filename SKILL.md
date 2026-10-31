@@ -154,6 +154,18 @@ duration, optional image or video backgrounds, music, and final dimensions. Poin
 at a local image, an AI-generated file saved in the project, or a direct Unsplash image URL. Remote
 media is downloaded during assembly.
 
+Use `VIDEO.motion.card` for intro/outro text: `fade-up` (soft rise), `slide-left` (directional
+entrance), `pop` (title scale-in), or `none`. Set `VIDEO.motion.accent` to a brand color. Use
+`VIDEO.transition.effect` between intro, chapter, and outro clips: directional `wipe*`, `slide*`,
+or `smooth*`; `fade`, `fadeblack`, `fadewhite`, or `dissolve`; `circleopen`, `circleclose`,
+`pixelize`; or `none` for a direct cut. Set `VIDEO.transition.duration` in seconds and keep it
+shorter than the clips being joined. Prefer a restrained effect and consistent timing; use a
+transition to clarify a scene change, not as decoration. The assembler uses local GSAP for card
+text and renders transitions at the configured video size. See the README motion guide for the
+effect list and examples.
+Never use indigo, violet, or purple by default; include those colors only when the user asks for
+them.
+
 ```bash
 node scripts/assemble.mjs
 ```
@@ -219,16 +231,14 @@ takes the size back, and records at the real viewport so there is no letterbox.
 **Never film a password.** `signIn()` types the email visibly and fills the password without
 keystrokes, for exactly this reason.
 
-**Voice.** OpenAI's `gpt-4o-mini-tts`. `TTS_VOICE` picks from alloy, ash, ballad, coral, echo,
-fable, nova, onyx, sage, shimmer, verse — `onyx` is the default, a level male read that suits
-instruction. `TTS_INSTRUCTIONS` steers delivery in plain English and does more for how it lands
-than the voice does; the default asks for an unhurried colleague rather than an announcer.
+**Voice.** OpenAI's `gpt-4o-mini-tts`. The default is `marin`; OpenAI currently recommends `marin`
+or `cedar` for quality. `TTS_VOICE` can select another supported voice. `TTS_INSTRUCTIONS` steers
+tone, emotion, intonation, and pace in plain English. Give instructions that fit the product and
+audience, and audition a line before recording the full set.
 Audition a line or two before committing to a set.
 
-macOS `say` was the original engine and is gone: free and offline, but audibly synthetic, and a
-video going to a client cannot sound like a train announcement. The cost of the replacement is
-negligible — a full thirteen-chapter set is under two cents — and clips are cached on voice +
-instructions + text, so fixing one sentence re-synthesises only that sentence.
+Speech clips are cached on voice + instructions + text, so fixing one sentence re-synthesises only
+that sentence.
 
 **Changing the voice re-times the video.** Narration drives the pacing, so a new engine or voice
 means re-recording, not re-muxing the audio onto the old capture. Swapping audio of a different

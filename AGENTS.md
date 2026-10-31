@@ -9,6 +9,8 @@ and other coding agents.
 - Treat `VIDEO` in `scripts/config.mjs` as the agent-facing customization contract. Read it before
   changing a video, and edit it for brand, logo, chapter order, intro/outro, media, and output path.
 - Keep recording behavior in `scripts/lib.mjs` separate from project branding and media choices.
+- Match the product's actual visual identity. Never use indigo, violet, or purple as defaults; use
+  them only when the user specifies them.
 - Keep `intro`, `outro`, and `music.src` null when the user has not asked for them. Do not invent
   brand claims, URLs, or a call to action.
 - Local asset paths are relative to the project root. For AI-generated artwork, create the asset
