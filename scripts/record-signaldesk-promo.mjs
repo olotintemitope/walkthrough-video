@@ -9,12 +9,13 @@ import { execFileSync } from 'node:child_process'
 import { render } from './tts.mjs'
 
 const root = path.resolve('fixtures/signaldesk')
-const output = path.join(root, 'signaldesk-product-tour-1080p.mp4')
+const output = path.join(root, 'signaldesk-product-tour-4k.mp4')
 const music = path.join(root, 'assets/signaldesk-digital-clouds.mp3')
 const logo = null
 const introSeconds = 1
 const outroSeconds = 1
 const transitionSeconds = 0.12
+const renderScale = 2
 const captureDir = path.join(root, 'recording')
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'signaldesk-promo-'))
 const run = (command, args) => execFileSync(command, args, { stdio: 'inherit' })
@@ -91,8 +92,15 @@ function server() {
 
 async function aim(page, locator, hold = 120) {
   const target = locator.first()
-  await target.scrollIntoViewIfNeeded()
-  const box = await target.boundingBox()
+  let box = await target.boundingBox()
+  if (!box) throw new Error('Could not find the visible pointer target')
+  const viewport = page.viewportSize()
+  if (box.x < 0 || box.y < 0 || box.x + box.width > viewport.width || box.y + box.height > viewport.height) {
+    // Playwright's visibility helper waits for a stable box. That never happens while the camera
+    // eases, so scroll only when needed and do it without waiting on transform stability.
+    await target.evaluate((element) => element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }))
+    box = await target.boundingBox()
+  }
   if (!box) throw new Error('Could not find the visible pointer target')
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
@@ -122,11 +130,15 @@ let capture
 const cues = []
 
 try {
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 })
+  const context = await browser.newContext({ viewport: { width: 1920 * renderScale, height: 1080 * renderScale }, deviceScaleFactor: 1 })
   const page = await context.newPage()
   page.on('pageerror', (error) => console.error(`SignalDesk page error: ${error.message}`))
-  capture = await startHighQualityCapture(page, captureDir, { w: 1920, h: 1080 })
+  capture = await startHighQualityCapture(page, captureDir, { w: 1920 * renderScale, h: 1080 * renderScale })
   await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'networkidle' })
+  if (renderScale > 1) {
+    await page.addStyleTag({ content: `body{width:${100 / renderScale}vw!important;height:${100 / renderScale}vh!important;overflow:hidden!important}.app{width:100%!important;height:100%!important;min-height:0!important}` })
+    await page.evaluate((scale) => { window.__captureScale = scale }, renderScale)
+  }
   await page.waitForTimeout(900)
   await cursorOn(page)
 
@@ -187,12 +199,12 @@ try {
     kicker: 'AN AI CUSTOMER INTELLIGENCE PLATFORM',
     title: 'Hear the pattern.\nBuild what matters.',
     subtitle: 'Customer insight for teams that ship.', duration: introSeconds,
-  }, { directory: cards, name: 'signaldesk-intro', brand: 'SIGNALDESK AI', accent: '#c6df76', effect: 'fade-up', layout: 'editorial', transitionDuration: transitionSeconds })
+  }, { directory: cards, name: 'signaldesk-intro', brand: 'SIGNALDESK AI', width: 1920, height: 1080, layoutScale: renderScale, accent: '#c6df76', effect: 'fade-up', layout: 'editorial', transitionDuration: transitionSeconds })
   const outroRaw = await createAnimatedCard({
     kicker: 'SIGNALDESK AI · ORBIT LABS',
     title: 'From customer voice\nto product action.',
     subtitle: 'A clearer reason to build what matters.', duration: outroSeconds,
-  }, { directory: cards, name: 'signaldesk-outro', brand: 'SIGNALDESK AI', accent: '#c6df76', effect: 'slide-left', layout: 'closing' })
+  }, { directory: cards, name: 'signaldesk-outro', brand: 'SIGNALDESK AI', width: 1920, height: 1080, layoutScale: renderScale, accent: '#c6df76', effect: 'slide-left', layout: 'closing' })
   const intro = path.join(temp, 'intro.mp4')
   const app = path.join(temp, 'app.mp4')
   const outro = path.join(temp, 'outro.mp4')
@@ -202,6 +214,8 @@ try {
   const silent = path.join(temp, 'signaldesk-promo-silent.mp4')
   transitionClips([intro, app, outro], { effect: ['fade', 'smoothright'], duration: transitionSeconds }, silent)
   muxNarrationAndMusic(silent, cues, introSeconds, duration(app), outroSeconds, output)
+  run(process.execPath, [path.resolve('scripts/check-video-quality.mjs'), output,
+    '--width', String(1920 * renderScale), '--height', String(1080 * renderScale), '--source', recorded])
   console.log(`SignalDesk product video: ${output}`)
 } finally {
   await browser.close().catch(() => {})

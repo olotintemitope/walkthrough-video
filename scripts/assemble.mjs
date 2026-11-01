@@ -3,7 +3,8 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { VIDEO } from './config.mjs'
+import { fileURLToPath } from 'node:url'
+import { VIDEO, RENDER_SCALE } from './config.mjs'
 import { createAnimatedCard, transitionClips } from './motion.mjs'
 
 let CHAPTERS
@@ -21,6 +22,12 @@ const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 const duration = (file) => Number(execFileSync('ffprobe', [
   '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file,
 ]).toString().trim())
+const videoDimensions = (file) => {
+  const result = JSON.parse(execFileSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', file,
+  ], { encoding: 'utf8' }))
+  return result.streams[0]
+}
 const hasAudio = (file) => execFileSync('ffprobe', [
   '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index', '-of', 'csv=p=0', file,
 ]).toString().trim().length > 0
@@ -46,7 +53,10 @@ const resolveSource = (src, label) => {
 async function cardImage(scene, dest, overlayOnly = false) {
   const browser = await chromium.launch({ headless: true })
   try {
-    const page = await browser.newPage({ viewport: { width: VIDEO.width, height: VIDEO.height }, deviceScaleFactor: 1 })
+    const page = await browser.newPage({
+      viewport: { width: VIDEO.width / RENDER_SCALE, height: VIDEO.height / RENDER_SCALE },
+      deviceScaleFactor: RENDER_SCALE,
+    })
     const title = escapeHtml(scene.title)
     const subtitle = escapeHtml(scene.subtitle)
     const brand = escapeHtml(VIDEO.brand)
@@ -149,8 +159,9 @@ try {
       const captured = await createAnimatedCard(scene, {
         directory: captureDir,
         name: key,
-        width: VIDEO.width,
-        height: VIDEO.height,
+        width: VIDEO.width / RENDER_SCALE,
+        height: VIDEO.height / RENDER_SCALE,
+        layoutScale: RENDER_SCALE,
         brand: VIDEO.brand,
         logo: VIDEO.logo,
         accent: VIDEO.motion?.accent || '#c8f04a',
@@ -178,6 +189,10 @@ try {
   for (const chapter of chosen) {
     const source = path.resolve(`./mp4/${chapter.id}.mp4`)
     if (!fs.existsSync(source)) throw new Error(`missing chapter video: ${source} (record it with node run.mjs ${chapter.id})`)
+    const sourceSize = videoDimensions(source)
+    if (sourceSize.width < VIDEO.width || sourceSize.height < VIDEO.height) {
+      throw new Error(`chapter ${chapter.id} is ${sourceSize.width}×${sourceSize.height}, below the configured ${VIDEO.width}×${VIDEO.height} delivery size; record it at the target size instead of enlarging it`)
+    }
     const target = path.join(temp, `chapter-${normalized.length}.mp4`)
     normalizeClip(source, target)
     normalized.push(target)
@@ -191,6 +206,7 @@ try {
   fs.mkdirSync(path.dirname(output), { recursive: true })
   if (VIDEO.music?.src) addMusic(assembled, resolveSource(VIDEO.music.src, 'music'), output)
   else fs.copyFileSync(assembled, output)
+  run(process.execPath, [fileURLToPath(new URL('./check-video-quality.mjs', import.meta.url)), output])
   console.log(`Finished product video: ${output}`)
 } finally {
   fs.rmSync(temp, { recursive: true, force: true })

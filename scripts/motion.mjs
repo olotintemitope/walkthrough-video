@@ -36,7 +36,7 @@ function imageData(source) {
 /** Capture animated, native-resolution intro/outro typography as a clean 30fps MP4. */
 export async function createAnimatedCard(scene, {
   directory, name, width = 1920, height = 1080, brand = '', logo = null,
-  accent = '#c8f04a', effect = 'fade-up', layout = 'editorial', exit = false, transitionDuration = 0.45,
+  layoutScale = 1, accent = '#c8f04a', effect = 'fade-up', layout = 'editorial', exit = false, transitionDuration = 0.45,
 }) {
   const duration = Number(scene.duration)
   if (!(duration > 0)) throw new Error(`${name} duration must be greater than zero`)
@@ -105,13 +105,22 @@ export async function createAnimatedCard(scene, {
   fs.mkdirSync(directory, { recursive: true })
   const browser = await chromium.launch({ headless: true })
   try {
-    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 })
+    const page = await browser.newPage({
+      viewport: { width: width * layoutScale, height: height * layoutScale },
+      deviceScaleFactor: 1,
+    })
     const pageErrors = []
     page.on('pageerror', (error) => pageErrors.push(error.message))
     await page.setContent(markup, { waitUntil: 'load' })
+    if (layoutScale > 1) {
+      await page.addStyleTag({ content: `body{width:${100 / layoutScale}vw!important;height:${100 / layoutScale}vh!important;transform:scale(${layoutScale});transform-origin:0 0;overflow:hidden!important}` })
+    }
     const gsapReady = await page.evaluate(() => typeof window.gsap?.timeline === 'function' && typeof window.playScene === 'function')
     if (!gsapReady) throw new Error('GSAP did not initialize in the title-card browser')
-    const capture = await startHighQualityCapture(page, directory, { w: width, h: height })
+    const capture = await startHighQualityCapture(page, directory, {
+      w: width * layoutScale,
+      h: height * layoutScale,
+    })
     await page.evaluate(() => window.playScene())
     await page.waitForTimeout(Math.ceil(duration * 1000))
     const rendered = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector('h1')).opacity))

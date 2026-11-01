@@ -4,15 +4,18 @@ import { spawn } from 'node:child_process'
 import { render } from './tts.mjs'
 import path from 'node:path'
 
-import { TARGET, APP, BIN, SERVER, SERVER_ENV, START_URL, HEADLESS, DEVICE, LOGIN, SIZE, SEL } from './config.mjs'
+import { TARGET, APP, BIN, SERVER, SERVER_ENV, START_URL, HEADLESS, DEVICE, LOGIN, SIZE, RENDER_SCALE, SEL } from './config.mjs'
 
 export { TARGET, APP, BIN, SERVER, LOGIN, SEL }
 
 /** Capture Chrome's PNG screencast frames and encode them once at delivery quality. */
-export async function startHighQualityCapture(win, dir, view) {
+export async function startHighQualityCapture(win, dir, view, { width, height } = {}) {
   const cdp = await win.context().newCDPSession(win)
   const portrait = view.h > view.w
-  const outputSize = portrait ? { width: 1080, height: 1920 } : { width: 1920, height: 1080 }
+  const outputSize = {
+    width: width ?? (portrait ? 1080 : view.w),
+    height: height ?? (portrait ? 1920 : view.h),
+  }
   const output = path.join(dir, 'capture-silent.mp4')
   const vf = `scale=${outputSize.width}:${outputSize.height}:force_original_aspect_ratio=decrease,pad=${outputSize.width}:${outputSize.height}:(ow-iw)/2:(oh-ih)/2:color=0xEAEDED,format=yuv420p`
   const ffmpeg = spawn('ffmpeg', [
@@ -42,7 +45,7 @@ export async function startHighQualityCapture(win, dir, view) {
 
   await cdp.send('Page.enable')
   await cdp.send('Page.startScreencast', {
-    format: 'png', maxWidth: view.w, maxHeight: view.h, everyNthFrame: 1,
+    format: 'png', maxWidth: outputSize.width, maxHeight: outputSize.height, everyNthFrame: 1,
   })
 
   // CDP sends frames only when the page changes. Write the latest frame at a fixed
@@ -75,6 +78,8 @@ export async function startHighQualityCapture(win, dir, view) {
 const CURSOR = `
 (() => {
   if (document.getElementById('__cur')) return
+  const baseScale = Math.max(1, Number(window.__captureScale) || 1)
+  document.documentElement.style.setProperty('--capture-scale', baseScale)
 
   /* The app goes inside a stage the camera can move; the cursor and captions stay outside it.
      That split is what makes a following camera workable at all - the stage scales, while the
@@ -89,27 +94,28 @@ const CURSOR = `
 
   const s = document.createElement('style')
   s.textContent = \`
-    #__cur{position:fixed;left:0;top:0;width:22px;height:22px;z-index:2147483647;pointer-events:none;
+    #__cur{position:fixed;left:0;top:0;width:calc(22px * var(--capture-scale,1));height:calc(22px * var(--capture-scale,1));z-index:2147483647;pointer-events:none;
       transform:translate(-2px,-2px);transition:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-    #__ring{position:fixed;left:0;top:0;width:44px;height:44px;border-radius:50%;z-index:2147483646;
-      pointer-events:none;border:3px solid #F5A524;opacity:0;transform:translate(-50%,-50%) scale(.4)}
+    #__cur svg{width:calc(22px * var(--capture-scale,1));height:calc(22px * var(--capture-scale,1))}
+    #__ring{position:fixed;left:0;top:0;width:calc(44px * var(--capture-scale,1));height:calc(44px * var(--capture-scale,1));border-radius:50%;z-index:2147483646;
+      pointer-events:none;border:calc(3px * var(--capture-scale,1)) solid #F5A524;opacity:0;transform:translate(-50%,-50%) scale(.4)}
     #__ring.go{animation:__r .45s ease-out}
     @keyframes __r{0%{opacity:.95;transform:translate(-50%,-50%) scale(.4)}
                    100%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}}
-    #__cap{position:fixed;left:50%;bottom:38px;transform:translateX(-50%);z-index:2147483645;
-      pointer-events:none;max-width:76vw;padding:14px 28px;border-radius:8px;
-      background:rgba(20,24,33,.93);color:#fff;font:600 26px/1.35 Inter,system-ui,sans-serif;
+    #__cap{position:fixed;left:50%;bottom:calc(38px * var(--capture-scale,1));transform:translateX(-50%);z-index:2147483645;
+      pointer-events:none;max-width:76vw;padding:calc(14px * var(--capture-scale,1)) calc(28px * var(--capture-scale,1));border-radius:calc(8px * var(--capture-scale,1));
+      background:rgba(20,24,33,.93);color:#fff;font:600 calc(26px * var(--capture-scale,1))/1.35 Inter,system-ui,sans-serif;
       text-align:center;opacity:0;transition:opacity .25s ease;box-shadow:0 8px 26px rgba(0,0,0,.3)}
     #__card{position:fixed;inset:0;z-index:2147483644;pointer-events:none;display:flex;
       align-items:center;justify-content:center;background:rgba(20,24,33,.92);
       opacity:0;transition:opacity .35s ease}
-    #__card span{color:#fff;font:800 62px/1.2 Poppins,Inter,system-ui,sans-serif;
+    #__card span{color:#fff;font:800 calc(62px * var(--capture-scale,1))/1.2 Poppins,Inter,system-ui,sans-serif;
       letter-spacing:-.02em;text-align:center;max-width:70vw}\`
   document.head.appendChild(s)
 
   const c = document.createElement('div')
   c.id = '__cur'
-  c.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 2l14 10.5-6.2.6 3.4 7.1-2.9 1.4-3.4-7.1L5 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>'
+  c.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 2l14 10.5-6.2.6 3.4 7.1-2.9 1.4-3.4-7.1L5 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>'
   document.body.appendChild(c)
   const r = document.createElement('div'); r.id = '__ring'; document.body.appendChild(r)
   const cap = document.createElement('div'); cap.id = '__cap'; document.body.appendChild(cap)
@@ -126,12 +132,14 @@ const CURSOR = `
      the point: a cut that snaps between crops reads as a slideshow, where a slow follow reads as
      someone showing you their screen. Runs in the page on rAF - driving it per-frame over the
      debugging protocol would cost a round trip per frame and stutter. */
-  const cam = { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1, timer: 0 }
+  const wideX = (window.scrollX + window.innerWidth / 2) / baseScale
+  const wideY = (window.scrollY + window.innerHeight / 2) / baseScale
+  const cam = { x: wideX, y: wideY, k: 1, tx: wideX, ty: wideY, tk: 1, timer: 0 }
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
   const aimWide = () => {
     cam.tk = 1
-    cam.tx = window.scrollX + window.innerWidth / 2
-    cam.ty = window.scrollY + window.innerHeight / 2
+    cam.tx = (window.scrollX + window.innerWidth / 2) / baseScale
+    cam.ty = (window.scrollY + window.innerHeight / 2) / baseScale
   }
 
   function frame() {
@@ -141,17 +149,17 @@ const CURSOR = `
     cam.y += (cam.ty - cam.y) * 0.10
 
     const vw = window.innerWidth, vh = window.innerHeight
-    const sw = Math.max(stage.scrollWidth, vw), sh = Math.max(stage.scrollHeight, vh)
+    const sw = Math.max(stage.scrollWidth * baseScale, vw), sh = Math.max(stage.scrollHeight * baseScale, vh)
     const sx = window.scrollX, sy = window.scrollY
     // Hold the focus point in the middle, then refuse to show anything past the page edges -
     // letterboxing the app against its own background is the one thing that looks broken.
-    let dx = vw / 2 + sx - cam.x * cam.k
-    let dy = vh / 2 + sy - cam.y * cam.k
+    let dx = vw / 2 + sx - cam.x * cam.k * baseScale
+    let dy = vh / 2 + sy - cam.y * cam.k * baseScale
     // Translation is in viewport coordinates while stage content lives in document
     // coordinates. Include scroll offsets and the real stage size when limiting travel.
     dx = clamp(dx, vw + sx - sw * cam.k, sx)
     dy = clamp(dy, vh + sy - sh * cam.k, sy)
-    stage.style.transform = \`translate(\${dx}px, \${dy}px) scale(\${cam.k})\`
+    stage.style.transform = \`translate(\${dx}px, \${dy}px) scale(\${cam.k * baseScale})\`
     requestAnimationFrame(frame)
   }
   requestAnimationFrame(frame)
@@ -185,7 +193,7 @@ const CURSOR = `
     // target stays at frame centre and the page remains panned to an edge after zooming out.
     cam.timer = setTimeout(aimWide, after)
   }
-  window.__camState = () => ({ ...cam })
+  window.__camState = () => ({ ...cam, baseScale })
 })()`
 
 /**
@@ -236,14 +244,25 @@ export async function boot({ dir, size = SIZE } = {}) {
     // deviceScaleFactor 1 keeps the file sane; the layout is still the phone's.
     const profile = DEVICE ? devices[DEVICE] : null
     if (DEVICE && !profile) throw new Error(`Unknown DEVICE "${DEVICE}" - see Playwright's device list`)
+    const renderScale = DEVICE ? 1 : Math.max(1, Number(RENDER_SCALE) || 1)
     const ctx = await browser.newContext({
       ...(profile ?? {}),
-      viewport: profile?.viewport ?? size,
-      // Keep desktop's CSS pixels one-to-one with the 1080p capture; the source UI reads
-      // more cleanly without being resampled from a 2x backing store.
-      deviceScaleFactor: 1,
+      viewport: profile?.viewport ?? { width: size.width * renderScale, height: size.height * renderScale },
+      deviceScaleFactor: profile?.deviceScaleFactor ?? 1,
     })
     win = await ctx.newPage()
+    if (renderScale > 1) {
+      await win.addInitScript((scale) => {
+        window.__captureScale = scale
+        const install = () => {
+          const style = document.createElement('style')
+          style.textContent = `body{width:${100 / scale}vw!important;height:${100 / scale}vh!important;overflow:hidden!important}`
+          document.head.appendChild(style)
+        }
+        if (document.head) install()
+        else document.addEventListener('DOMContentLoaded', install, { once: true })
+      }, renderScale)
+    }
     const initialView = await win.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }))
     capture = await startHighQualityCapture(win, dir, initialView)
     t0 = capture.startedAt
@@ -361,8 +380,8 @@ async function focusOn(win, locator, k, stay = false) {
     const cy = window.scrollY + window.innerHeight / 2
     return {
       scale: c?.k ?? 1,
-      awayFromWide: !c || Math.abs(c.tx - cx) > 1 || Math.abs(c.ty - cy) > 1
-        || Math.abs(c.x - cx) > 1 || Math.abs(c.y - cy) > 1
+      awayFromWide: !c || Math.abs(c.tx * c.baseScale - cx) > 1 || Math.abs(c.ty * c.baseScale - cy) > 1
+        || Math.abs(c.x * c.baseScale - cx) > 1 || Math.abs(c.y * c.baseScale - cy) > 1
         || Math.abs(c.tk - 1) > 0.01,
     }
   })

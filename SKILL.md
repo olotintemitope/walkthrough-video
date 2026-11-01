@@ -248,6 +248,13 @@ length onto an existing take desynchronises every step after the first line.
 asks for a storyboard or shooting script rather than a video, write the chapters anyway and print
 the lines — the two artefacts stay in sync because they are the same source.
 
+## Final video quality checkpoint
+
+Before delivery, follow [`docs/video-quality-checklist.md`](docs/video-quality-checklist.md). Run
+`node scripts/check-video-quality.mjs <final.mp4> --source <source-capture.mp4>` when the source is
+available. A 4K container does not count as native 4K when its source capture is 1080p. Never skip
+the exported-frame review because metadata passed.
+
 ## Files
 
 | | |

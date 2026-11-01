@@ -61,6 +61,18 @@ can prove the recorder flow; it cannot prove the user's product UI, data, narrat
    during capture or export. Report remaining limits honestly.
 5. Give the user the full path to the final MP4 and concise test results.
 
+Before delivery, run `node scripts/check-video-quality.mjs <final.mp4> --source <source-capture.mp4>`
+when that checker is present and a source capture is available. Confirm the source capture is at
+least as large as the delivery frame: a 4K container does not count as native 4K when its source
+capture is 1080p. If the checker is unavailable, use ffprobe to verify dimensions, frame rate, and
+duration, and decode the final file with FFmpeg.
+
+Then inspect the exported MP4 itself at the beginning, a feature interaction, and the end. Include
+typing, zoom-in and zoom-out, and edge-sensitive views where applicable. Confirm text and pointer
+edges stay readable, the UI fills the frame, zooms return to a stable wide view, and no unintended
+blank edges or long pauses appear. Listen to speech over music and a music-only section; narration
+must remain clear and in front. Metadata passing never replaces this visual and audio review.
+
 ## Guardrails
 
 - Never expose passwords or secrets in visible typing, captions, logs, or sample data.

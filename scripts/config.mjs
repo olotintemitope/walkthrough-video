@@ -67,10 +67,17 @@ export const DB = {
 }
 
 /**
- * Recording size, for desktop. 1920x1080 is the sweet spot: readable, and a sane file.
- * Ignored when DEVICE is set - the device's own viewport wins, which is the point of it.
+ * CSS layout size, for desktop. Keep this at 1920x1080 for familiar desktop proportions.
+ * RENDER_SCALE controls the browser viewport and output pixel dimensions.
  */
 export const SIZE = { width: 1920, height: 1080 }
+
+/**
+ * Browser recording scale. Keep SIZE as the app's layout size; set RENDER_SCALE to 2 for a
+ * native 4K capture from a 1920x1080 layout. Set VIDEO.width/height to 3840x2160 too.
+ * This scales the browser viewport and app stage, not the encoded 1080p frames.
+ */
+export const RENDER_SCALE = 1
 
 /**
  * Optional, project-level finishing. Edit this block to brand the final video without touching
@@ -80,6 +87,7 @@ export const SIZE = { width: 1920, height: 1080 }
  */
 export const VIDEO = {
   output: './mp4/product-tour.mp4',
+  // Delivery dimensions. For native 4K, set width/height to 3840/2160 and RENDER_SCALE to 2.
   width: 1920,
   height: 1080,
   brand: 'Your product',

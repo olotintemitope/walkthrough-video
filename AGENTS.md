@@ -30,5 +30,11 @@ and other coding agents.
 5. Report the output file path and any remaining limits. Never claim the video was reviewed if
    only the source chapter or a screenshot was inspected.
 
+Before delivery, follow [`docs/video-quality-checklist.md`](docs/video-quality-checklist.md). Run
+`node scripts/check-video-quality.mjs <final.mp4> --source <source-capture.mp4>` when the source
+capture is available. This check must pass at the configured delivery dimensions; a 4K container
+made from 1080p source footage does not count as native 4K. Also inspect the exported MP4 itself for
+sharpness while typing, zoom framing and return, edge coverage, pacing, and narration/music balance.
+
 When the project has no real chapters or media yet, use a clearly labeled fixture as a preview and
 say that it does not verify the user's product footage, narration, or soundtrack.

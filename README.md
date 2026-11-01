@@ -1,332 +1,168 @@
 # walkthrough-video
 
-Record narrated product walkthrough videos by driving your own app.
+Create a clear, narrated product video from a real web or Electron app. Playwright drives the
+workflow while the recorder captures the app, visible pointer, zooms, captions, and voiceover. Then
+assemble the footage into one branded MP4 with optional intro, outro, images, video, and music.
 
-One MP4 per chapter, with a title card, burned-in captions, a visible cursor that glides to each
-target, a camera that follows it, and spoken narration. It drives the real application — web,
-Electron, or a mobile viewport — so what is on screen is the product, not a mockup.
+Built for coding agents such as Codex and Claude. The scripts can also be run directly.
 
-Designed for coding agents such as Codex and Claude, and the scripts are plain Node programs that
-also run on their own. `AGENTS.md` and `SKILL.md` describe the agent workflow.
+## Start here
 
-Need a ready-to-use request? See [sample prompts for coding agents](docs/agent-prompts.md) for
-recording a feature, investigating camera issues, customizing motion, and reviewing an export.
-See [video layouts](docs/layouts.md) for the built-in title card, the app-screen fixture layouts,
-and title-card designs that can be added for a project.
+**Using a coding agent?** Give it this repo and ask it to make a product-feature video. For example:
 
-The [Daymark todo and reminder demo](fixtures/todo-reminder/README.md) is a working example app
-with a [recorded promo video](fixtures/todo-reminder/daymark-todo-reminder-promo-1080p.mp4).
-The [SignalDesk AI product demo](fixtures/signaldesk/README.md) includes a recorded customer
-intelligence tour with expressive narration and downloaded, licensed music mixed below the speaker.
+> Use the walkthrough-video skill in this repository to make a clear product video of the app at
+> `http://localhost:3000`. Inspect the app first, choose one customer goal, record the complete
+> workflow, write concise product-led narration, assemble a branded 1080p MP4, and review the
+> exported video for sharpness, pacing, zooms, and audio balance. Ask me for brand assets if needed.
 
-**1080p motion example:** [Watch the animated product walkthrough](fixtures/camera-check/motion-showcase-1080p.mp4)
-with GSAP title animation, a screen transition, and the real visible pointer/click effect.
+See [more agent prompts](docs/agent-prompts.md), the [Codex/Claude instructions](SKILL.md), or the
+[ChatGPT skill ZIP](chatgpt-skills/walkthrough-video-chatgpt.zip).
 
----
+**Want to see examples first?** Open the [Daymark todo app and promo](fixtures/todo-reminder/README.md)
+or the [SignalDesk AI demo and 4K promo](fixtures/signaldesk/README.md). There is also a short
+[1080p motion sample](fixtures/camera-check/motion-showcase-1080p.mp4).
 
-## Why this exists
+## Make a video of your app
 
-A screen recorder gives you a file. It does not give you a video that teaches. Four things make
-the difference, and each is a piece of this:
+### 1. Install the tools
 
-- **Playwright records the page, not the OS pointer**, so clicks would be invisible. A cursor is
-  drawn into the page and moved alongside the real input.
-- **Narration has to match what is on screen.** Each line's audio is rendered first and measured,
-  then the recorder holds that step for exactly that long. There is no timeline to edit after.
-- **A take must not inherit the last take's data.** Every chapter restores the same database
-  snapshot, so a duplicate barcode cannot break a recording.
-- **A drawer that opens is not a feature demonstrated.** Chapters complete their actions, and the
-  harness reports any chapter that ended on a visible error.
-
-A side effect worth knowing: driving every flow end to end exercises paths no test covers. On its
-first real use this turned up a 500 on an optional field left blank, and a printable document with
-no page margins that ran off the paper.
-
-## What it drives
-
-| Target | What it is |
-| --- | --- |
-| `web` | Any URL — Laravel, Rails, Django, a SPA, an admin panel |
-| `electron` | A packaged desktop app |
-| `web` + `DEVICE` | Mobile, via Playwright device emulation: real viewport, pixel ratio, touch |
-
-Mobile emulation is genuine mobile *web*. It is **not** a native iOS/Android app — a real `.ipa`
-or `.apk` needs Appium, which this does not wrap.
-
-## Requirements
-
-- Node 18+
-- `ffmpeg` and `ffprobe` on your PATH
-- An OpenAI API key, for narration (`gpt-4o-mini-tts`)
-- The app you want to film, running locally
+You need Node.js 18+, FFmpeg, a local copy of the app you want to film, and an OpenAI API key for
+narration. From this repository, install the project and Playwright:
 
 ```bash
+npm install
 npm install playwright-core
-export OPENAI_API_KEY=sk-...
+npx playwright-core install chromium
 ```
 
-> **Point it at a local server.** Chapters create products, orders and staff. Recording against
-> production writes all of that into a real business's records — and an action like approving a
-> payment on camera approves it for real.
+Install FFmpeg with your system package manager (`brew install ffmpeg` on macOS, or your Linux
+distribution's package manager). Confirm `ffmpeg` and `ffprobe` run from a terminal. Install `curl`
+if you plan to use remote image, video, or music URLs.
 
----
-
-## Quick start
-
-### 1. Configure
-
-Everything you need to change is in **`scripts/config.mjs`**:
-
-```js
-export const TARGET    = 'web'                          // or 'electron'
-export const START_URL = 'http://your-app.test/login'
-export const LOGIN     = { email: '...', password: '...' }
-export const DEVICE     = null                          // or 'iPhone 14 Pro'
-export const DB = { live: '/path/app.sqlite', baseline: './baseline.sqlite' }
-export const SEL = { /* your app's selectors — see step 3 */ }
-```
-
-### 2. Snapshot your demo data
+Set the OpenAI key in your terminal before recording:
 
 ```bash
-cp /path/to/app.sqlite ./baseline.sqlite
+export OPENAI_API_KEY='your-api-key'
 ```
 
-Pick a moment when the data looks good on camera. It is restored before every chapter, so takes
-are repeatable. Set `DB.live` to `null` if there is nothing to reset.
+### 2. Point the recorder at your app
 
-### 3. Survey the app
+Start your app locally, then edit `scripts/config.mjs`. Set `START_URL`, login details, and the
+selectors for your app. The provided values are examples and will not match your product. Record
+against a local or disposable demo account because a chapter can create or update records.
 
-Never guess selectors — print what is actually there:
+If the app uses a local SQLite database, set `DB.live` and save a clean copy as `DB.baseline` so
+each take starts with the same data. Set `DB.live` to `null` when there is no database to reset.
+
+### 3. Inspect the app and plan the story
+
+Survey the real controls before writing selectors:
 
 ```bash
-node survey.mjs                    # every section
-node survey.mjs --drawers          # also open each form and list its fields
-node survey.mjs Products Orders    # only these — start here on a big app
+node scripts/survey.mjs --limit 8
+node scripts/survey.mjs --drawers Products
 ```
 
-Output streams to `survey.txt` as well as the terminal, because Node buffers stdout when piped and
-a thirty-section app otherwise looks hung for twenty minutes.
+Copy `chapters.example.mjs` to `chapters.mjs`, then adapt a chapter to one customer goal. Explain
+why the feature helps, show the complete action, and confirm the result on screen. A chapter that
+only opens a form does not demonstrate the feature.
 
-### 4. Write chapters
-
-Copy `chapters.example.mjs` to `chapters.mjs` and rewrite the bodies:
-
-```js
-{ id: 'ch01-add-product', title: 'How to add a product', async run(win, ctx) {
-    await titleCard(win, 'How to add a product')
-    await openTab(win, 'Products', { pause: 1500 })
-    await say(ctx, win, 'The catalogue: everything you sell.')
-    await click(win, act(win, '+ New product'), { pause: 1300 })
-    await type(win, field(win, 'Product name'), 'Northwind 5kW Inverter')
-    await say(ctx, win, 'Give it a name the way a customer would say it.')
-    await submit(win)                 // true only once the form has closed
-    await say(ctx, win, 'And here it is, with no stock.')
-    await caption(win)
-}}
-```
-
-### 5. Record
+### 4. Record the chapter
 
 ```bash
-node run.mjs                 # every chapter
-node run.mjs ch01 ch04       # just these
+node scripts/run.mjs                  # record every chapter
+node scripts/run.mjs ch06-add-product  # record a matching chapter only
 ```
 
-Each chapter prints its duration and line count and warns if it ended on an error. Output lands in
-`mp4/<id>.mp4`.
+Chapter videos are written to `mp4/`. The recorder adds captions and OpenAI narration. Voice clips
+are cached, so unchanged lines do not need to be generated again.
 
-### 6. Assemble a finished product video
+### 5. Brand and assemble the finished video
 
-Edit the `VIDEO` block in `scripts/config.mjs`. It controls the brand, intro/outro copy, media,
-soundtrack, chapter order, and output size in one place. Scenes and music are optional:
-
-```js
-export const VIDEO = {
-  output: './mp4/product-tour.mp4',
-  brand: 'Northstar',
-  logo: './assets/logo.png', // optional local image or direct image URL
-  chapters: ['ch01-overview', 'ch04-invitations'], // omit to use chapter-file order
-  intro: {
-    title: 'Meet Northstar',
-    subtitle: 'Plan thoughtful work together',
-    duration: 2,
-    background: { type: 'image', src: './assets/intro.png' },
-  },
-  outro: {
-    title: 'See what your team can do',
-    subtitle: 'northstar.example',
-    duration: 2,
-    background: null, // or { type: 'video', src: './assets/outro.mp4' }
-  },
-  motion: { card: 'fade-up', accent: '#c8f04a' },
-  transition: { effect: 'smoothleft', duration: 0.45 },
-  music: {
-    src: './assets/soft-loop.mp3', // local audio or a direct URL; null means no music
-    volume: 0.12,
-    fadeIn: 1.2,
-    fadeOut: 2,
-  },
-}
-```
-
-### Choose the motion
-
-Set each scene's optional `layout` to `editorial` (default), `split`, or `closing`; see the
-[video layouts guide](docs/layouts.md). `motion.card` separately controls how its text enters. These
-are restrained GSAP animations rendered locally as part of the video:
-
-| Value | Behavior | Good for |
-| --- | --- | --- |
-| `fade-up` | Text fades in while rising slightly | A calm, general-purpose introduction |
-| `slide-left` | The eyebrow enters from the left; title and supporting copy rise into place | A directional, editorial feel |
-| `pop` | The title scales up into place | A short emphasis on a product or feature name |
-| `none` | Text appears without an entrance animation | Minimal title cards or video backgrounds |
-
-`motion.accent` sets the marker and guide accent color on title cards. Use a color from the product's
-brand palette. Indigo, violet, and purple are not defaults; use them only when the user requests
-them.
-
-`transition.effect` controls the join between each intro, chapter, and outro clip. Set one effect
-for all joins, or pass an array with one effect per join in clip order. Supported values:
-
-| Effect family | Values |
-| --- | --- |
-| Directional wipe | `wipeleft`, `wiperight`, `wipeup`, `wipedown` |
-| Directional slide | `slideleft`, `slideright`, `slideup`, `slidedown` |
-| Smooth directional reveal | `smoothleft`, `smoothright`, `smoothup`, `smoothdown` |
-| Fade | `fade`, `fadeblack`, `fadewhite`, `dissolve` |
-| Shape or texture | `circleopen`, `circleclose`, `pixelize` |
-| Direct cut | `none` |
-
-Set `transition.duration` in seconds. Keep it shorter than the shortest clip being joined; a value
-around `0.3`–`0.6` seconds usually keeps a product demo moving without distracting from the UI. A
-direct cut (`effect: 'none'`) ignores the duration. In an effect array, `none` makes just that join a
-direct cut. Transitions are rendered at the configured video dimensions, and the soundtrack is
-crossfaded with the clips.
-
-For example, use a simple fade between scenes and no title motion:
-
-```js
-motion: { card: 'none', accent: '#d9623e' },
-transition: { effect: 'fade', duration: 0.35 },
-```
-
-For three clips (intro, chapter, outro), use a separate transition at each join:
-
-```js
-transition: { effect: ['fade', 'smoothright'], duration: 0.42 },
-```
-
-Use your own image, an image generated for the project, or a direct image URL from Unsplash. Save
-AI-generated artwork in `assets/` and point `src` to it. Remote images, video, and music are
-downloaded before rendering. Run:
-
-Give intro and outro cards enough time for the title to enter and settle; this example uses two
-seconds each, then clears the intro text before the product footage arrives.
+Edit the `VIDEO` block in `scripts/config.mjs`. Set the brand, logo, intro/outro, transitions, music,
+chapter order, and output path. Use your own brand assets, direct media URLs, or an image you asked
+an agent to create. Keep `intro`, `outro`, or `music.src` as `null` to omit them.
 
 ```bash
 node scripts/assemble.mjs
 ```
 
-The assembler joins the selected chapter MP4s with the optional intro and outro, then adds the
-optional music bed. It writes one upload-ready file to `VIDEO.output` and keeps the chapter MP4s.
-Set `intro` or `outro` to `null`, or `music.src` to `null`, to omit them. High-quality assembly
-preserves the detail in the capture, but cannot restore detail missing from the original app.
-Intro and outro cards use local GSAP timelines for sequenced text motion; chapter transitions are
-rendered at the configured output dimensions. GSAP is installed locally, so title-card animation
-does not depend on a runtime CDN. Title-card entrances affect text only; they do not animate or
-reframe the recorded product footage.
+The finished video is written to `VIDEO.output` (default: `mp4/product-tour.mp4`). Review the
+exported MP4 itself before publishing: check the opening, a feature action, the ending, and the
+narration/music balance.
 
----
+Run the automated metadata/source check first, then complete the required visual and audio review:
 
-## Writing chapters people actually learn from
+```bash
+node scripts/check-video-quality.mjs mp4/product-tour.mp4 --source recording/product-tour-silent.mp4
+```
 
-- **Complete the action.** `submit()` returns true only once the form has closed — closing is the
-  proof it saved. Chapters that merely open forms teach nothing, and a reviewer will notice.
-- **Say why before where.** "Stock moves on the Stock side, where every change gets a name and a
-  reason against it" beats "click the Stock tab". People keep the reason and rediscover the button.
-- **One idea per line.** Each `say()` is a caption as well as a sentence.
-- **Name the trap.** The invite link that expires in an hour, the field that looks optional but
-  isn't, the button that does nothing until a box is ticked — these are why someone is watching
-  instead of clicking around themselves.
+The source argument is optional when no source capture is retained. The check compares the source
+capture with the configured delivery size, so a 4K export enlarged from a 1080p recording fails.
+The assembler also checks every selected chapter's source dimensions and stops instead of silently
+upscaling a chapter to the delivery size.
+The [video quality checklist](docs/video-quality-checklist.md) covers sharpness while typing,
+zoom framing, edge coverage, pacing, and sound. Agents must review the exported MP4 itself; passing
+metadata checks alone is not enough.
 
-## The camera
+## Customize the look and sound
 
-The frame follows the pointer: each step puts the camera on its target, then returns to the wide
-view before the next target. `{ stay: true }` keeps a punch-in across related steps, and a pause
-also lets the camera pull back. Nothing is asked of the chapter.
+- **Brand:** Set `VIDEO.brand` and `VIDEO.logo`; provide brand colors and fonts if you have them.
+  The recorded app keeps its own visual identity.
+- **Intro and outro:** Set the title, subtitle, duration, and optional image or video background.
+  Keep the copy short enough to read comfortably.
+- **Music:** Set `VIDEO.music.src` to a local audio file or direct audio URL. Adjust `volume`,
+  `fadeIn`, and `fadeOut` so narration stays clearly louder.
+- **Motion:** Choose `fade-up`, `slide-left`, `pop`, or `none` for title text. Card layouts include
+  `editorial`, `split`, and `closing`; see the [layouts guide](docs/layouts.md).
+- **Transitions:** Choose a supported FFmpeg transition in `VIDEO.transition`. A fade or direct cut
+  keeps attention on the product.
+- **Zoom and pointer:** The camera follows the pointer and returns to the wide view between targets.
+  Use `{ stay: true }` to hold a zoom across related actions, then call `wide(win)` before moving on.
 
-| | |
+### Choose the output resolution
+
+The default export is 1920×1080. For a native 4K desktop browser recording, keep the app layout at
+1920×1080 and change these settings in `scripts/config.mjs`:
+
+```js
+export const SIZE = { width: 1920, height: 1080 }
+export const RENDER_SCALE = 2
+
+export const VIDEO = {
+  width: 3840,
+  height: 2160,
+  // keep your other VIDEO settings here
+}
+```
+
+This renders the browser viewport and animated title cards at 3840×2160 while preserving the app's
+1920×1080 layout. It takes longer and produces larger files. Choose the resolution before recording;
+converting a 1080p video to 4K only enlarges existing pixels and cannot restore fine detail. This
+setting is for web browser captures; Electron uses the app window's recording dimensions.
+
+Match the product's real brand. Indigo, violet, and purple are not defaults; use them only when
+requested.
+
+## Using the skills
+
+- **Codex:** Follow `SKILL.md` in this repository or copy it into your project's `.agents/skills/`
+  directory.
+- **Claude:** Copy the skill to `.claude/skills/walkthrough-video/` in your project.
+- **ChatGPT:** Upload `chatgpt-skills/walkthrough-video-chatgpt.zip` using the Skills upload flow.
+
+## Supported apps
+
+| App | Support |
 | --- | --- |
-| `ZOOM.action` / `ZOOM.point` / `ZOOM.wide` | how close each kind of step sits |
-| `SETTLE` | how long before a pause counts as "stopped" |
-| `{ stay: true }` | keep the punch-in across a run of fields in one form |
-| `wide(win)` | an explicit context beat |
+| Web app | Any local URL, including Laravel, Rails, Django, and SPAs |
+| Electron app | A packaged desktop app |
+| Mobile web | Playwright device emulation with a real mobile viewport and touch events |
 
-Two decisions, if you change it. The app is moved inside a `#__stage` the camera transforms while
-the pointer and captions stay outside, so captions keep their size and Playwright keeps working
-untouched — `boundingBox()` reports where things have been moved to. And the easing runs in the
-page on `requestAnimationFrame`; driving it from the recorder would cost a round trip per frame.
+Mobile emulation records mobile web, not native iOS or Android apps. Native apps need a different
+automation tool such as Appium.
 
-## Narration
-
-OpenAI `gpt-4o-mini-tts`. The default voice is `marin`; `marin` and `cedar` are recommended for
-quality. `TTS_VOICE` can select another supported voice. `TTS_INSTRUCTIONS` steers tone, emotion,
-intonation, and pace in plain English.
-
-Clips cache on voice + instructions + text, so fixing one sentence re-synthesises one sentence. A
-thirteen-chapter set costs a couple of cents.
-
-**Changing the voice re-times the video.** Narration drives the pacing, so a new voice means
-re-recording, not re-muxing audio onto the old capture.
-
-## Troubleshooting
-
-| Symptom | What it means |
-| --- | --- |
-| `no element matched` | The selector is wrong. Re-run the survey; don't just lengthen the wait. |
-| `matched N node(s) but none became visible` | It's there but hidden — a collapsed nav group, or an overlay. Different problem. |
-| `(no suggestion for "X")` | Typeahead selector wrong, or the term matches nothing in your data. The line was **not** added. |
-| `left an error on screen` | The flow failed. Usually demo data; sometimes a real bug. |
-| `rows=0` on a page with data | The list is still loading — Livewire and friends fetch after first paint. Raise the pause. |
-| Sign-in never completes | Auth endpoints are commonly rate limited. `signIn()` waits out a 60s window and retries once. |
-
-**Collapsed nav groups.** Set `SEL.navGroupToggle` to the group toggle and use `openTab()`. It
-opens groups one at a time until the item appears — many sidebars are accordions where opening one
-closes the last, so "expand everything" settles on exactly one group. Judge by whether the item
-appeared, not by an attribute: some UIs leave `aria-expanded` and `hidden` stale.
-
-**Never film a password.** `signIn()` types the email visibly and fills the password without
-keystrokes, for exactly this reason.
-
----
-
-## Using it as a Claude Code skill
-
-Drop the folder into `.claude/skills/walkthrough-video/` in your project (or
-`~/.claude/skills/` for every project). Claude picks it up next session, and asking for "a demo
-video of the checkout" or "a training video for the admin side" invokes it.
-
-## Using it as a ChatGPT skill
-
-Upload `chatgpt-skills/walkthrough-video-chatgpt.zip` from ChatGPT's **Skills → Create → Upload
-from your computer** flow. The ZIP contains a standalone `SKILL.md` for this repository's product
-recording workflow.
-
-## Files
-
-| | |
-| --- | --- |
-| `SKILL.md` | The repository skill instructions for coding agents |
-| `scripts/config.mjs` | **The only file you need to edit** — app, selectors, branding and media |
-| `scripts/lib.mjs` | Launch, sign-in, cursor, captions, camera, narration timing |
-| `scripts/tts.mjs` | Speech rendering, caching, muxing |
-| `scripts/encode.sh` | webm → MP4, auto-oriented, scaled to fit, never stretched |
-| `scripts/run.mjs` | Runs chapters, restores the snapshot, encodes, reports |
-| `scripts/assemble.mjs` | Joins chapters with optional intro, outro and music |
-| `scripts/survey.mjs` | Prints your app's real sections, actions and form fields |
-| `chapters.example.mjs` | A complete worked set to copy from |
+For agent workflow details, see `AGENTS.md`. For sample requests, see [agent prompts](docs/agent-prompts.md).
 
 ## Licence
 
